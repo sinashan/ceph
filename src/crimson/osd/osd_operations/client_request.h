@@ -41,6 +41,7 @@ class ClientRequest final : public PhasedOperationT<ClientRequest>,
 
 public:
   class PGPipeline : public CommonPGPipeline {
+    public:
     struct AwaitMap : OrderedExclusivePhaseT<AwaitMap> {
       static constexpr auto type_name = "ClientRequest::PGPipeline::await_map";
     } await_map;
@@ -53,6 +54,9 @@ public:
     friend class ClientRequest;
     friend class LttngBackend;
     friend class HistoricBackend;
+    friend class ReqRequest;
+    friend class LogMissingRequest;
+    friend class LogMissingRequestReply;
   };
 
   /**
@@ -214,12 +218,7 @@ private:
   interruptible_future<> with_sequencer(FuncT&& func);
   auto reply_op_error(const Ref<PG>& pg, int err);
 
-  enum class seq_mode_t {
-    IN_ORDER,
-    OUT_OF_ORDER
-  };
-
-  interruptible_future<seq_mode_t> do_process(
+  interruptible_future<> do_process(
     instance_handle_t &ihref,
     Ref<PG>& pg,
     crimson::osd::ObjectContextRef obc);
@@ -227,7 +226,7 @@ private:
     ::crimson::osd::IOInterruptCondition> process_pg_op(
     Ref<PG> &pg);
   ::crimson::interruptible::interruptible_future<
-    ::crimson::osd::IOInterruptCondition, seq_mode_t> process_op(
+    ::crimson::osd::IOInterruptCondition> process_op(
       instance_handle_t &ihref,
       Ref<PG> &pg);
   bool is_pg_op() const;
@@ -242,6 +241,10 @@ private:
       Errorator>;
 
   bool is_misdirected(const PG& pg) const;
+
+  const SnapContext get_snapc(
+    Ref<PG>& pg,
+    crimson::osd::ObjectContextRef obc) const;
 
 public:
 
@@ -260,3 +263,7 @@ public:
 };
 
 }
+
+#if FMT_VERSION >= 90000
+template <> struct fmt::formatter<crimson::osd::ClientRequest> : fmt::ostream_formatter {};
+#endif

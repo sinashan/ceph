@@ -328,6 +328,9 @@ public:
 
   std::set<client_t> client_reclaim_gather;
 
+  const bufferlist& get_snap_trace(Session *session, SnapRealm *realm) const;
+  const bufferlist& get_snap_trace(client_t client, SnapRealm *realm) const;
+
 private:
   friend class MDSContinuation;
   friend class ServerContext;
@@ -498,6 +501,8 @@ private:
   bool replay_unsafe_with_closed_session = false;
   double cap_revoke_eviction_timeout = 0;
   uint64_t max_snaps_per_dir = 100;
+  // long snapshot names have the following format: "_<SNAPSHOT-NAME>_<INODE-NUMBER>"
+  uint64_t snapshot_name_max = NAME_MAX - 1 - 1 - 13;
   unsigned delegate_inos_pct = 0;
   uint64_t dir_max_entries = 0;
   int64_t bal_fragment_size_max = 0;

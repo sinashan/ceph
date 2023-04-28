@@ -4,8 +4,8 @@
 #pragma once
 
 #include "common/RWLock.h"
-#include "rgw/rgw_service.h"
-#include "rgw/rgw_cache.h"
+#include "rgw_service.h"
+#include "rgw_cache.h"
 
 #include "svc_sys_obj_core.h"
 
@@ -48,6 +48,7 @@ protected:
            RGWObjVersionTracker *objv_tracker,
            const rgw_raw_obj& obj,
            bufferlist *bl, off_t ofs, off_t end,
+           ceph::real_time* pmtime, uint64_t* psize,
            std::map<std::string, bufferlist> *attrs,
 	   bool raw_attrs,
            rgw_cache_entry_info *cache_info,

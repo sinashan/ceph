@@ -65,15 +65,6 @@ options:
   - mds
   flags:
   - runtime
-# max xattr kv pairs size for each dir/file
-- name: mds_max_xattr_pairs_size
-  type: size
-  level: advanced
-  desc: maximum aggregate size of extended attributes on a file
-  default: 64_K
-  services:
-  - mds
-  with_legacy: true
 - name: mds_cache_trim_interval
   type: secs
   level: advanced
@@ -1341,14 +1332,6 @@ options:
   desc: number of seconds after which clients which have not responded to cap revoke
     messages by the MDS are evicted.
   default: 0
-  services:
-  - mds
-- name: mds_max_retries_on_remount_failure
-  type: uint
-  level: advanced
-  desc: number of consecutive failed remount attempts for invalidating kernel dcache
-    after which client would abort.
-  default: 5
   services:
   - mds
 - name: mds_dump_cache_threshold_formatter

@@ -95,6 +95,24 @@ struct BuildMap;
  * event. All previous requests, whether already granted or not, are explicitly
  * released.
  *
+ * Timeouts:
+ *
+ *  Slow-Secondary Warning:
+ *  Once at least half of the replicas have accepted the reservation, we start
+ *  reporting any secondary that takes too long (more than <conf> milliseconds
+ *  after the previous response received) to respond to the reservation request.
+ *  (Why? because we have encountered real-life situations where a specific OSD
+ *  was systematically very slow (e.g. 5 seconds) to respond to the reservation
+ *  requests, slowing the scrub process to a crawl).
+ *
+ *  Reservation Timeout:
+ *  We limit the total time we wait for the replicas to respond to the
+ *  reservation request. If we don't get all the responses (either Grant or
+ *  Reject) within <conf> milliseconds, we give up and release all the
+ *  reservations we have acquired so far.
+ *  (Why? because we have encountered instances where a reservation request was
+ *  lost - either due to a bug or due to a network issue.)
+ *
  * A note re performance: I've measured a few container alternatives for
  * m_reserved_peers, with its specific usage pattern. Std::set is extremely
  * slow, as expected. flat_set is only slightly better. Surprisingly -
@@ -102,6 +120,9 @@ struct BuildMap;
  * std::vector: no need to pre-reserve.
  */
 class ReplicaReservations {
+  using clock = std::chrono::system_clock;
+  using tpoint_t = std::chrono::time_point<clock>;
+
   PG* m_pg;
   std::set<pg_shard_t> m_acting_set;
   OSDService* m_osds;
@@ -111,6 +132,11 @@ class ReplicaReservations {
   int m_pending{-1};
   const pg_info_t& m_pg_info;
   ScrubQueue::ScrubJobRef m_scrub_job;	///< a ref to this PG's scrub job
+  const ConfigProxy& m_conf;
+
+  // detecting slow peers (see 'slow-secondary' above)
+  std::chrono::milliseconds m_timeout;
+  std::optional<tpoint_t> m_timeout_point;
 
   void release_replica(pg_shard_t peer, epoch_t epoch);
 
@@ -118,6 +144,8 @@ class ReplicaReservations {
 
   /// notify the scrubber that we have failed to reserve replicas' resources
   void send_reject();
+
+  std::optional<tpoint_t> update_latecomers(tpoint_t now_is);
 
  public:
   std::string m_log_msg_prefix;
@@ -132,14 +160,18 @@ class ReplicaReservations {
   void discard_all();
 
   ReplicaReservations(PG* pg,
-		      pg_shard_t whoami,
-		      ScrubQueue::ScrubJobRef scrubjob);
+                      pg_shard_t whoami,
+                      ScrubQueue::ScrubJobRef scrubjob,
+                      const ConfigProxy& conf); 
 
   ~ReplicaReservations();
 
   void handle_reserve_grant(OpRequestRef op, pg_shard_t from);
 
   void handle_reserve_reject(OpRequestRef op, pg_shard_t from);
+
+  // if timing out on receiving replies from our replicas:
+  void handle_no_reply_timeout();
 
   std::ostream& gen_prefix(std::ostream& out) const;
 };
@@ -349,6 +381,8 @@ class PgScrubber : public ScrubPgIF,
   void discard_replica_reservations() final;
   void clear_scrub_reservations() final;  // PG::clear... fwds to here
   void unreserve_replicas() final;
+  void on_replica_reservation_timeout() final;
+
 
   // managing scrub op registration
 
@@ -449,6 +483,28 @@ class PgScrubber : public ScrubPgIF,
   // the I/F used by the state-machine (i.e. the implementation of
   // ScrubMachineListener)
 
+  CephContext* get_cct() const final { return m_pg->cct; }
+  LogChannelRef &get_clog() const final;
+  int get_whoami() const final;
+  spg_t get_spgid() const final { return m_pg->get_pgid(); }
+
+  scrubber_callback_cancel_token_t schedule_callback_after(
+    ceph::timespan duration, scrubber_callback_t &&cb);
+
+  void cancel_callback(scrubber_callback_cancel_token_t);
+
+  ceph::timespan get_range_blocked_grace() {
+    int grace = get_pg_cct()->_conf->osd_blocked_scrub_grace_period;
+    if (grace == 0) {
+      return ceph::timespan{};
+    }
+    ceph::timespan grace_period{
+      m_debug_blockrange ?
+      std::chrono::seconds(4) :
+      std::chrono::seconds{grace}};
+    return grace_period;
+  }
+
   [[nodiscard]] bool is_primary() const final
   {
     return m_pg->recovery_state.is_primary();
@@ -461,7 +517,6 @@ class PgScrubber : public ScrubPgIF,
 
   void select_range_n_notify() final;
 
-  Scrub::BlockedRangeWarning acquire_blocked_alarm() final;
   void set_scrub_blocked(utime_t since) final;
   void clear_scrub_blocked() final;
 
@@ -484,11 +539,9 @@ class PgScrubber : public ScrubPgIF,
   /// services (thus can be called from FSM reactions)
   void clear_pgscrub_state() final;
 
-  /*
-   * Send an 'InternalSchedScrub' FSM event either immediately, or - if
-   * 'm_need_sleep' is asserted - after a configuration-dependent timeout.
-   */
-  void add_delayed_scheduling() final;
+
+  std::chrono::milliseconds get_scrub_sleep_time() const final;
+  void queue_for_scrub_resched(Scrub::scrub_prio_t prio) final;
 
   void get_replicas_maps(bool replica_can_preempt) final;
 
@@ -679,13 +732,6 @@ class PgScrubber : public ScrubPgIF,
   [[nodiscard]] bool check_interval(epoch_t epoch_to_verify);
 
   epoch_t m_last_aborted{};  // last time we've noticed a request to abort
-
-  bool m_needs_sleep{true};  ///< should we sleep before being rescheduled?
-			     ///< always 'true', unless we just got out of a
-			     ///< sleep period
-
-  utime_t m_sleep_started_at;
-
 
   // 'optional', as 'ReplicaReservations' & 'LocalReservation' are
   // 'RAII-designed' to guarantee un-reserving when deleted.

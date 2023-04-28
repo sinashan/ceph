@@ -33,7 +33,7 @@ class SegmentAllocator {
  public:
   SegmentAllocator(JournalTrimmer *trimmer,
                    data_category_t category,
-                   reclaim_gen_t gen,
+                   rewrite_gen_t gen,
                    SegmentProvider &sp,
                    SegmentSeqAllocator &ssa);
 
@@ -122,7 +122,7 @@ class SegmentAllocator {
   std::string print_name;
   const segment_type_t type; // JOURNAL or OOL
   const data_category_t category;
-  const reclaim_gen_t gen;
+  const rewrite_gen_t gen;
   SegmentProvider &segment_provider;
   SegmentManagerGroup &sm_group;
   SegmentRef current_segment;
@@ -348,7 +348,7 @@ public:
   // when available, submit the record if possible
   using submit_ertr = base_ertr;
   using submit_ret = submit_ertr::future<record_locator_t>;
-  submit_ret submit(record_t&&);
+  submit_ret submit(record_t&&, bool with_atomic_roll_segment=false);
 
   void update_committed_to(const journal_seq_t& new_committed_to) {
     assert(new_committed_to != JOURNAL_SEQ_NULL);

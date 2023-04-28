@@ -1,9 +1,7 @@
 // -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab ft=cpp
 
-
-#ifndef CEPH_RGW_AUTH_KEYSTONE_H
-#define CEPH_RGW_AUTH_KEYSTONE_H
+#pragma once
 
 #include <string_view>
 #include <utility>
@@ -43,9 +41,7 @@ class TokenEngine : public rgw::auth::Engine {
   get_from_keystone(const DoutPrefixProvider* dpp, const std::string& token, bool allow_expired) const;
 
   acl_strategy_t get_acl_strategy(const token_envelope_t& token) const;
-  auth_info_t get_creds_info(const token_envelope_t& token,
-                             const std::vector<std::string>& admin_roles
-                            ) const noexcept;
+  auth_info_t get_creds_info(const token_envelope_t& token) const noexcept;
   result_t authenticate(const DoutPrefixProvider* dpp,
                         const std::string& token,
                         const std::string& service_token,
@@ -196,5 +192,3 @@ public:
 }; /* namespace keystone */
 }; /* namespace auth */
 }; /* namespace rgw */
-
-#endif /* CEPH_RGW_AUTH_KEYSTONE_H */

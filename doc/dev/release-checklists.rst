@@ -53,6 +53,13 @@ Misc
 - [x] update src/tools/monmaptool.cc (`min_mon_release` and corresponding output in `src/test/cli/monmaptool`)
 - [x] update src/cephadm/cephadm (`DEFAULT_IMAGE_RELEASE` to X)
 
+Docs
+~~~~
+
+- [x] Remove ``doc/releases/*.rst``. This should leave behind ``doc/releases/releases.yml`` which is used for doc building purposes.
+- [x] Cherry-pick 8cf9ad62949516666ad0f2c0bb7726ef68e4d666 ("doc: add releases links to toc"). There will be trivial conflicts.
+- [x] Add redirect for new major release at `RTD <https://readthedocs.org/dashboard/ceph/redirects/>`_.
+
 Feature bits
 ------------
 
@@ -111,7 +118,14 @@ In the `ceph/ceph-build.git` repo:
 - [x] add the version -> X mapping (`release_from_version()` in `scripts/build_utils.sh`)
 - [x] add the option for X (`case $RELEASE_BRANCH` in `ceph-dev-build/build/build_osc`)
 - [x] add the option for X (`case $RELEASE_BRANCH` in `ceph-dev-build/build/setup_osc`)
+- [x] grep for previous release and add relevant build targets (e.g. for reef https://github.com/ceph/ceph-build/pull/2076 and https://github.com/ceph/ceph-build/pull/2119)
 
+
+After dev freeze
+================
+
+- [x] add release name to redmine (using https://tracker.ceph.com/custom_fields/16/edit)
+- [x] add release name to .github/milestone.yml for github actions to automatically add milestone to backports
 
 First release candidate
 =======================

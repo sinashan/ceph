@@ -45,7 +45,6 @@ class Watch : public seastar::enable_shared_from_this<Watch> {
   seastar::future<> start_notify(NotifyRef);
   seastar::future<> send_notify_msg(NotifyRef);
   seastar::future<> send_disconnect_msg();
-  void discard_state();
   void do_watch_timeout(Ref<PG> pg);
 
   friend Notify;
@@ -68,6 +67,7 @@ public:
   ~Watch();
 
   seastar::future<> connect(crimson::net::ConnectionFRef, bool);
+  void disconnect();
   bool is_alive() const {
     return true;
   }
@@ -75,6 +75,8 @@ public:
     return static_cast<bool>(conn);
   }
   void got_ping(utime_t);
+
+  void discard_state();
 
   seastar::future<> remove();
 
@@ -235,3 +237,7 @@ seastar::future<> Notify::create_n_propagate(
 } // namespace crimson::osd
 
 WRITE_CLASS_DENC(crimson::osd::notify_reply_t)
+
+#if FMT_VERSION >= 90000
+template <> struct fmt::formatter<crimson::osd::notify_reply_t> : fmt::ostream_formatter {};
+#endif

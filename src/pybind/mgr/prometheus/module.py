@@ -1,6 +1,7 @@
 import cherrypy
+import yaml
 from collections import defaultdict
-from distutils.version import StrictVersion
+from pkg_resources import packaging  # type: ignore
 import json
 import math
 import os
@@ -8,11 +9,11 @@ import re
 import threading
 import time
 import enum
+from collections import namedtuple
+
 from mgr_module import CLIReadCommand, MgrModule, MgrStandbyModule, PG_STATES, Option, ServiceInfoT, HandleCommandResult, CLIWriteCommand
 from mgr_util import get_default_addr, profile_method, build_url
 from rbd import RBD
-from collections import namedtuple
-import yaml
 
 from typing import DefaultDict, Optional, Dict, Any, Set, cast, Tuple, Union, List, Callable
 
@@ -32,10 +33,11 @@ DEFAULT_PORT = 9283
 # ipv6 isn't yet configured / supported and CherryPy throws an uncaught
 # exception.
 if cherrypy is not None:
-    v = StrictVersion(cherrypy.__version__)
+    Version = packaging.version.Version
+    v = Version(cherrypy.__version__)
     # the issue was fixed in 3.2.3. it's present in 3.2.2 (current version on
     # centos:7) and back to at least 3.0.0.
-    if StrictVersion("3.1.2") <= v < StrictVersion("3.2.3"):
+    if Version("3.1.2") <= v < Version("3.2.3"):
         # https://github.com/cherrypy/cherrypy/issues/1100
         from cherrypy.process import servers
         servers.wait_for_occupied_port = lambda host, port: None
@@ -68,6 +70,8 @@ def health_status_to_number(status: str) -> int:
 
 
 DF_CLUSTER = ['total_bytes', 'total_used_bytes', 'total_used_raw_bytes']
+
+OSD_BLOCKLIST = ['osd_blocklist_count']
 
 DF_POOL = ['max_avail', 'avail_raw', 'stored', 'stored_raw', 'objects', 'dirty',
            'quota_bytes', 'quota_objects', 'rd', 'rd_bytes', 'wr', 'wr_bytes',
@@ -809,6 +813,13 @@ class Module(MgrModule):
                 'DF pool {}'.format(state),
                 ('pool_id',)
             )
+        for state in OSD_BLOCKLIST:
+            path = 'cluster_{}'.format(state)
+            metrics[path] = Metric(
+                'gauge',
+                path,
+                'OSD Blocklist Count {}'.format(state),
+            )
         for state in NUM_OBJECTS:
             path = 'num_objects_{}'.format(state)
             metrics[path] = Metric(
@@ -846,9 +857,9 @@ class Module(MgrModule):
         self.log.info('Restarting engine...')
         cherrypy.engine.stop()
         cherrypy.server.httpserver = None
+        server_addr = cast(str, self.get_localized_module_option('server_addr', get_default_addr()))
         server_port = cast(int, self.get_localized_module_option('server_port', DEFAULT_PORT))
-        self.set_uri(build_url(scheme='http', host=self.get_server_addr(), port=server_port, path='/'))
-        cherrypy.config.update({'server.socket_port': server_port})
+        self.configure(server_addr, server_port)
         cherrypy.engine.start()
         self.log.info('Engine started.')
 
@@ -938,6 +949,17 @@ class Module(MgrModule):
                     pool['stats'][stat],
                     (pool['id'],)
                 )
+
+    @profile_method()
+    def get_osd_blocklisted_entries(self) -> None:
+        r = self.mon_command({
+            'prefix': 'osd blocklist ls',
+            'format': 'json'
+        })
+        blocklist_entries = r[2].split(' ')
+        blocklist_count = blocklist_entries[1]
+        for stat in OSD_BLOCKLIST:
+            self.metrics['cluster_{}'.format(stat)].set(int(blocklist_count))
 
     @profile_method()
     def get_fs(self) -> None:
@@ -1043,7 +1065,9 @@ class Module(MgrModule):
         pg_summary = self.get('pg_summary')
 
         for pool in pg_summary['by_pool']:
-            num_by_state = defaultdict(int)  # type: DefaultDict[str, int]
+            num_by_state: DefaultDict[str, int] = defaultdict(int)
+            for state in PG_STATES:
+                num_by_state[state] = 0
 
             for state_name, count in pg_summary['by_pool'][pool].items():
                 for state in state_name.split('+'):
@@ -1072,8 +1096,9 @@ class Module(MgrModule):
         for server in self.list_servers():
             host = cast(str, server.get('hostname', ''))
             for service in cast(List[ServiceInfoT], server.get('services', [])):
-                ret.update({(service['id'], service['type']): (
-                    host, service['ceph_version'], service.get('name', ''))})
+                ret.update({(service['id'], service['type']): (host,
+                                                               service.get('ceph_version', 'unknown'),
+                                                               service.get('name', ''))})
         return ret
 
     @profile_method()
@@ -1578,6 +1603,21 @@ class Module(MgrModule):
             self.metrics[path].set(stats['stat_sum']['num_objects_repaired'],
                                    labelvalues=(stats['poolid'],))
 
+    def get_all_daemon_health_metrics(self) -> None:
+        daemon_metrics = self.get_daemon_health_metrics()
+        self.log.debug('metrics jeje %s' % (daemon_metrics))
+        for daemon_name, health_metrics in daemon_metrics.items():
+            for health_metric in health_metrics:
+                path = f'daemon_health_metrics{daemon_name}{health_metric["type"]}'
+                self.metrics[path] = Metric(
+                    'counter',
+                    'daemon_health_metrics',
+                    'Health metrics for Ceph daemons',
+                    ('type', 'ceph_daemon',)
+                )
+                self.metrics[path].set(health_metric['value'], labelvalues=(
+                    health_metric['type'], daemon_name,))
+
     @profile_method(True)
     def collect(self) -> str:
         # Clear the metrics before scraping
@@ -1586,6 +1626,7 @@ class Module(MgrModule):
 
         self.get_health()
         self.get_df()
+        self.get_osd_blocklisted_entries()
         self.get_pool_stats()
         self.get_fs()
         self.get_osd_stats()
@@ -1595,6 +1636,7 @@ class Module(MgrModule):
         self.get_pg_status()
         self.get_pool_repaired_objects()
         self.get_num_objects()
+        self.get_all_daemon_health_metrics()
 
         for daemon, counters in self.get_all_perf_counters().items():
             for path, counter_info in counters.items():
@@ -1681,6 +1723,69 @@ class Module(MgrModule):
         self.collect()
         self.get_file_sd_config()
 
+    def configure(self, server_addr: str, server_port: int) -> None:
+        # cephadm deployments have a TLS monitoring stack setup option.
+        # If the cephadm module is on and the setting is true (defaults to false)
+        # we should have prometheus be set up to interact with that
+        cephadm_secure_monitoring_stack = self.get_module_option_ex(
+            'cephadm', 'secure_monitoring_stack', False)
+        if cephadm_secure_monitoring_stack:
+            try:
+                self.setup_cephadm_tls_config(server_addr, server_port)
+                return
+            except Exception as e:
+                self.log.exception(f'Failed to setup cephadm based secure monitoring stack: {e}\n',
+                                   'Falling back to default configuration')
+        self.setup_default_config(server_addr, server_port)
+
+    def setup_default_config(self, server_addr: str, server_port: int) -> None:
+        cherrypy.config.update({
+            'server.socket_host': server_addr,
+            'server.socket_port': server_port,
+            'engine.autoreload.on': False,
+            'server.ssl_module': None,
+            'server.ssl_certificate': None,
+            'server.ssl_private_key': None,
+        })
+        # Publish the URI that others may use to access the service we're about to start serving
+        self.set_uri(build_url(scheme='http', host=self.get_server_addr(),
+                     port=server_port, path='/'))
+
+    def setup_cephadm_tls_config(self, server_addr: str, server_port: int) -> None:
+        from cephadm.ssl_cert_utils import SSLCerts
+        # the ssl certs utils uses a NamedTemporaryFile for the cert files
+        # generated with generate_cert_files function. We need the SSLCerts
+        # object to not be cleaned up in order to have those temp files not
+        # be cleaned up, so making it an attribute of the module instead
+        # of just a standalone object
+        self.cephadm_monitoring_tls_ssl_certs = SSLCerts()
+        host = self.get_mgr_ip()
+        try:
+            old_cert = self.get_store('root/cert')
+            old_key = self.get_store('root/key')
+            if not old_cert or not old_key:
+                raise Exception('No old credentials for mgr-prometheus endpoint')
+            self.cephadm_monitoring_tls_ssl_certs.load_root_credentials(old_cert, old_key)
+        except Exception:
+            self.cephadm_monitoring_tls_ssl_certs.generate_root_cert(host)
+            self.set_store('root/cert', self.cephadm_monitoring_tls_ssl_certs.get_root_cert())
+            self.set_store('root/key', self.cephadm_monitoring_tls_ssl_certs.get_root_key())
+
+        cert_file_path, key_file_path = self.cephadm_monitoring_tls_ssl_certs.generate_cert_files(
+            self.get_hostname(), host)
+
+        cherrypy.config.update({
+            'server.socket_host': server_addr,
+            'server.socket_port': server_port,
+            'engine.autoreload.on': False,
+            'server.ssl_module': 'builtin',
+            'server.ssl_certificate': cert_file_path,
+            'server.ssl_private_key': key_file_path,
+        })
+        # Publish the URI that others may use to access the service we're about to start serving
+        self.set_uri(build_url(scheme='https', host=self.get_server_addr(),
+                     port=server_port, path='/'))
+
     def serve(self) -> None:
 
         class Root(object):
@@ -1761,10 +1866,8 @@ class Module(MgrModule):
                                              self.STALE_CACHE_RETURN]:
             self.stale_cache_strategy = self.STALE_CACHE_FAIL
 
-        server_addr = cast(str, self.get_localized_module_option(
-            'server_addr', get_default_addr()))
-        server_port = cast(int, self.get_localized_module_option(
-            'server_port', DEFAULT_PORT))
+        server_addr = cast(str, self.get_localized_module_option('server_addr', get_default_addr()))
+        server_port = cast(int, self.get_localized_module_option('server_port', DEFAULT_PORT))
         self.log.info(
             "server_addr: %s server_port: %s" %
             (server_addr, server_port)
@@ -1777,19 +1880,13 @@ class Module(MgrModule):
         else:
             self.log.info('Cache disabled')
 
-        cherrypy.config.update({
-            'server.socket_host': server_addr,
-            'server.socket_port': server_port,
-            'engine.autoreload.on': False
-        })
-        # Publish the URI that others may use to access the service we're
-        # about to start serving
-        self.set_uri(build_url(scheme='http', host=self.get_server_addr(), port=server_port, path='/'))
+        self.configure(server_addr, server_port)
 
         cherrypy.tree.mount(Root(), "/")
         self.log.info('Starting engine...')
         cherrypy.engine.start()
         self.log.info('Engine started.')
+
         # wait for the shutdown event
         self.shutdown_event.wait()
         self.shutdown_event.clear()

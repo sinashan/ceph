@@ -70,6 +70,7 @@ class Collection(str, enum.Enum):
     basic_usage_by_class = 'basic_usage_by_class'
     basic_rook_v01 = 'basic_rook_v01'
     perf_memory_metrics = 'perf_memory_metrics'
+    basic_pool_options_bluestore = 'basic_pool_options_bluestore'
 
 MODULE_COLLECTION : List[Dict] = [
     {
@@ -130,6 +131,12 @@ MODULE_COLLECTION : List[Dict] = [
         "name": Collection.perf_memory_metrics,
         "description": "Heap stats and mempools for mon and mds",
         "channel": "perf",
+        "nag": False
+    },
+    {
+        "name": Collection.basic_pool_options_bluestore,
+        "description": "Per-pool bluestore config options",
+        "channel": "basic",
         "nag": False
     },
 ]
@@ -1086,7 +1093,17 @@ class Module(MgrModule):
                                             'wr': pool_stats['wr'],
                                             'wr_bytes': pool_stats['wr_bytes']
                         }
-
+                    pool_data['options'] = {}
+                    # basic_pool_options_bluestore collection
+                    if self.is_enabled_collection(Collection.basic_pool_options_bluestore):
+                        bluestore_options = ['compression_algorithm',
+                                             'compression_mode',
+                                             'compression_required_ratio',
+                                             'compression_min_blob_size',
+                                             'compression_max_blob_size']
+                        for option in bluestore_options:
+                            if option in pool['options']:
+                                pool_data['options'][option] = pool['options'][option]
                 cast(List[Dict[str, Any]], report['pools']).append(pool_data)
                 if 'rbd' in pool['application_metadata']:
                     rbd_num_pools += 1
@@ -1523,6 +1540,8 @@ class Module(MgrModule):
         # Formatting the perf histograms so they are human-readable. This will change the
         # ranges and values, which are currently in list form, into strings so that
         # they are displayed horizontally instead of vertically.
+        if 'report' in report:
+            report = report['report']
         try:
             # Formatting ranges and values in osd_perf_histograms
             mode = 'osd_perf_histograms'
@@ -1920,10 +1939,13 @@ Please consider enabling the telemetry module with 'ceph telemetry on'.'''
 
         if not self.channel_device:
             # device channel is off, no need to display its report
-            return 0, json.dumps(self.get_report_locked('default'), indent=4, sort_keys=True), ''
+            report = self.get_report_locked('default')
+        else:
+            # telemetry is on and device channel is enabled, show both
+            report = self.get_report_locked('all')
 
-        # telemetry is on and device channel is enabled, show both
-        return 0, json.dumps(self.get_report_locked('all'), indent=4, sort_keys=True), ''
+        self.format_perf_histogram(report)
+        return 0, json.dumps(report, indent=4, sort_keys=True), ''
 
     @CLIReadCommand('telemetry preview-all')
     def preview_all(self) -> Tuple[int, str, str]:

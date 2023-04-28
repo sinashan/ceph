@@ -12,7 +12,7 @@ namespace crimson::os::seastore {
 
 SegmentedOolWriter::SegmentedOolWriter(
   data_category_t category,
-  reclaim_gen_t gen,
+  rewrite_gen_t gen,
   SegmentProvider& sp,
   SegmentSeqAllocator &ssa)
   : segment_allocator(nullptr, category, gen, sp, ssa),
@@ -32,7 +32,8 @@ SegmentedOolWriter::alloc_write_ertr::future<>
 SegmentedOolWriter::write_record(
   Transaction& t,
   record_t&& record,
-  std::list<LogicalCachedExtentRef>&& extents)
+  std::list<LogicalCachedExtentRef>&& extents,
+  bool with_atomic_roll_segment)
 {
   LOG_PREFIX(SegmentedOolWriter::write_record);
   assert(extents.size());
@@ -46,7 +47,9 @@ SegmentedOolWriter::write_record(
   stats.md_bytes += record.size.get_raw_mdlength();
   stats.num_records += 1;
 
-  return record_submitter.submit(std::move(record)
+  return record_submitter.submit(
+    std::move(record),
+    with_atomic_roll_segment
   ).safe_then([this, FNAME, &t, extents=std::move(extents)
               ](record_locator_t ret) mutable {
     DEBUGT("{} finish with {} and {} extents",
@@ -57,8 +60,7 @@ SegmentedOolWriter::write_record(
       TRACET("{} ool extent written at {} -- {}",
              t, segment_allocator.get_name(),
              extent_addr, *extent);
-      extent->invalidate_hints();
-      t.mark_delayed_extent_ool(extent, extent_addr);
+      t.update_delayed_ool_extent_addr(extent, extent_addr);
       extent_addr = extent_addr.as_seg_paddr().add_offset(
           extent->get_length());
     }
@@ -102,7 +104,8 @@ SegmentedOolWriter::do_write(
         assert(record_submitter.check_action(record.size) !=
                action_t::ROLL);
         fut_write = write_record(
-            t, std::move(record), std::move(pending_extents));
+            t, std::move(record), std::move(pending_extents),
+            true/* with_atomic_roll_segment */);
       }
       return trans_intr::make_interruptible(
         record_submitter.roll_segment(
@@ -175,50 +178,94 @@ SegmentedOolWriter::alloc_write_ool_extents(
 }
 
 void ExtentPlacementManager::init(
-    JournalTrimmerImplRef &&trimmer, AsyncCleanerRef &&cleaner)
+    JournalTrimmerImplRef &&trimmer,
+    AsyncCleanerRef &&cleaner,
+    AsyncCleanerRef &&cold_cleaner)
 {
   writer_refs.clear();
-
-  ceph_assert(RECLAIM_GENERATIONS > 0);
-  auto segment_cleaner = dynamic_cast<SegmentCleaner*>(cleaner.get());
-  ceph_assert(segment_cleaner != nullptr);
-  data_writers_by_gen.resize(RECLAIM_GENERATIONS, {});
-  for (reclaim_gen_t gen = 0; gen < RECLAIM_GENERATIONS; ++gen) {
-    writer_refs.emplace_back(std::make_unique<SegmentedOolWriter>(
-          data_category_t::DATA, gen, *segment_cleaner,
-          segment_cleaner->get_ool_segment_seq_allocator()));
-    data_writers_by_gen[gen] = writer_refs.back().get();
+  auto cold_segment_cleaner = dynamic_cast<SegmentCleaner*>(cold_cleaner.get());
+  dynamic_max_rewrite_generation = MIN_COLD_GENERATION - 1;
+  if (cold_segment_cleaner) {
+    dynamic_max_rewrite_generation = MAX_REWRITE_GENERATION;
   }
 
-  md_writers_by_gen.resize(RECLAIM_GENERATIONS - 1, {});
-  for (reclaim_gen_t gen = 1; gen < RECLAIM_GENERATIONS; ++gen) {
-    writer_refs.emplace_back(std::make_unique<SegmentedOolWriter>(
-          data_category_t::METADATA, gen, *segment_cleaner,
-          segment_cleaner->get_ool_segment_seq_allocator()));
-    md_writers_by_gen[gen - 1] = writer_refs.back().get();
+  if (trimmer->get_journal_type() == journal_type_t::SEGMENTED) {
+    auto segment_cleaner = dynamic_cast<SegmentCleaner*>(cleaner.get());
+    ceph_assert(segment_cleaner != nullptr);
+    auto num_writers = generation_to_writer(dynamic_max_rewrite_generation + 1);
+
+    data_writers_by_gen.resize(num_writers, {});
+    for (rewrite_gen_t gen = OOL_GENERATION; gen < MIN_COLD_GENERATION; ++gen) {
+      writer_refs.emplace_back(std::make_unique<SegmentedOolWriter>(
+	    data_category_t::DATA, gen, *segment_cleaner,
+            *ool_segment_seq_allocator));
+      data_writers_by_gen[generation_to_writer(gen)] = writer_refs.back().get();
+    }
+
+    md_writers_by_gen.resize(num_writers, {});
+    for (rewrite_gen_t gen = OOL_GENERATION; gen < MIN_COLD_GENERATION; ++gen) {
+      writer_refs.emplace_back(std::make_unique<SegmentedOolWriter>(
+	    data_category_t::METADATA, gen, *segment_cleaner,
+            *ool_segment_seq_allocator));
+      md_writers_by_gen[generation_to_writer(gen)] = writer_refs.back().get();
+    }
+
+    for (auto *device : segment_cleaner->get_segment_manager_group()
+				       ->get_segment_managers()) {
+      add_device(device);
+    }
+  } else {
+    assert(trimmer->get_journal_type() == journal_type_t::RANDOM_BLOCK);
+    auto rb_cleaner = dynamic_cast<RBMCleaner*>(cleaner.get());
+    ceph_assert(rb_cleaner != nullptr);
+    auto num_writers = generation_to_writer(dynamic_max_rewrite_generation + 1);
+    data_writers_by_gen.resize(num_writers, {});
+    md_writers_by_gen.resize(num_writers, {});
+    writer_refs.emplace_back(std::make_unique<RandomBlockOolWriter>(
+	    rb_cleaner));
+    // TODO: implement eviction in RBCleaner and introduce further writers
+    data_writers_by_gen[generation_to_writer(OOL_GENERATION)] = writer_refs.back().get();
+    md_writers_by_gen[generation_to_writer(OOL_GENERATION)] = writer_refs.back().get();
+    for (auto *rb : rb_cleaner->get_rb_group()->get_rb_managers()) {
+      add_device(rb->get_device());
+    }
   }
 
-  for (auto *device : segment_cleaner->get_segment_manager_group()
-                                     ->get_segment_managers()) {
-    add_device(device);
+  if (cold_segment_cleaner) {
+    for (rewrite_gen_t gen = MIN_COLD_GENERATION; gen < REWRITE_GENERATIONS; ++gen) {
+      writer_refs.emplace_back(std::make_unique<SegmentedOolWriter>(
+            data_category_t::DATA, gen, *cold_segment_cleaner,
+            *ool_segment_seq_allocator));
+      data_writers_by_gen[generation_to_writer(gen)] = writer_refs.back().get();
+    }
+    for (rewrite_gen_t gen = MIN_COLD_GENERATION; gen < REWRITE_GENERATIONS; ++gen) {
+      writer_refs.emplace_back(std::make_unique<SegmentedOolWriter>(
+            data_category_t::METADATA, gen, *cold_segment_cleaner,
+            *ool_segment_seq_allocator));
+      md_writers_by_gen[generation_to_writer(gen)] = writer_refs.back().get();
+    }
+    for (auto *device : cold_segment_cleaner->get_segment_manager_group()
+                                            ->get_segment_managers()) {
+      add_device(device);
+    }
   }
 
-  background_process.init(std::move(trimmer), std::move(cleaner));
+  background_process.init(std::move(trimmer),
+                          std::move(cleaner),
+                          std::move(cold_cleaner));
+  if (cold_segment_cleaner) {
+    ceph_assert(get_main_backend_type() == backend_type_t::SEGMENTED);
+    ceph_assert(background_process.has_cold_tier());
+  } else {
+    ceph_assert(!background_process.has_cold_tier());
+  }
 }
 
 void ExtentPlacementManager::set_primary_device(Device *device)
 {
   ceph_assert(primary_device == nullptr);
   primary_device = device;
-  if (device->get_backend_type() == backend_type_t::SEGMENTED) {
-    prefer_ool = false;
-    ceph_assert(devices_by_id[device->get_device_id()] == device);
-  } else {
-    // RBM device is not in the cleaner.
-    ceph_assert(device->get_backend_type() == backend_type_t::RANDOM_BLOCK);
-    prefer_ool = true;
-    add_device(primary_device);
-  }
+  ceph_assert(devices_by_id[device->get_device_id()] == device);
 }
 
 ExtentPlacementManager::open_ertr::future<>
@@ -228,32 +275,85 @@ ExtentPlacementManager::open_for_write()
   INFO("started with {} devices", num_devices);
   ceph_assert(primary_device != nullptr);
   return crimson::do_for_each(data_writers_by_gen, [](auto &writer) {
-    return writer->open();
+    if (writer) {
+      return writer->open();
+    }
+    return open_ertr::now();
   }).safe_then([this] {
     return crimson::do_for_each(md_writers_by_gen, [](auto &writer) {
-      return writer->open();
+      if (writer) {
+	return writer->open();
+      }
+      return open_ertr::now();
     });
   });
 }
 
-ExtentPlacementManager::alloc_paddr_iertr::future<>
-ExtentPlacementManager::delayed_alloc_or_ool_write(
-    Transaction &t,
-    const std::list<LogicalCachedExtentRef> &delayed_extents)
+ExtentPlacementManager::dispatch_result_t
+ExtentPlacementManager::dispatch_delayed_extents(Transaction &t)
 {
-  LOG_PREFIX(ExtentPlacementManager::delayed_alloc_or_ool_write);
-  DEBUGT("start with {} delayed extents",
-         t, delayed_extents.size());
-  assert(writer_refs.size());
-  return seastar::do_with(
-      std::map<ExtentOolWriter*, std::list<LogicalCachedExtentRef>>(),
-      [this, &t, &delayed_extents](auto& alloc_map) {
-    for (auto& extent : delayed_extents) {
-      // For now, just do ool allocation for any delayed extent
+  dispatch_result_t res;
+  res.delayed_extents = t.get_delayed_alloc_list();
+
+  // init projected usage
+  for (auto &extent : t.get_inline_block_list()) {
+    if (extent->is_valid()) {
+      res.usage.inline_usage += extent->get_length();
+      res.usage.cleaner_usage.main_usage += extent->get_length();
+    }
+  }
+
+  for (auto &extent : res.delayed_extents) {
+    if (dispatch_delayed_extent(extent)) {
+      res.usage.inline_usage += extent->get_length();
+      res.usage.cleaner_usage.main_usage += extent->get_length();
+      t.mark_delayed_extent_inline(extent);
+    } else {
+      if (extent->get_rewrite_generation() < MIN_COLD_GENERATION) {
+        res.usage.cleaner_usage.main_usage += extent->get_length();
+      } else {
+        assert(background_process.has_cold_tier());
+        res.usage.cleaner_usage.cold_ool_usage += extent->get_length();
+      }
+      t.mark_delayed_extent_ool(extent);
       auto writer_ptr = get_writer(
           extent->get_user_hint(),
           get_extent_category(extent->get_type()),
-          extent->get_reclaim_generation());
+          extent->get_rewrite_generation());
+      res.alloc_map[writer_ptr].emplace_back(extent);
+    }
+  }
+  return res;
+}
+
+ExtentPlacementManager::alloc_paddr_iertr::future<>
+ExtentPlacementManager::write_delayed_ool_extents(
+    Transaction& t,
+    extents_by_writer_t& alloc_map) {
+  return trans_intr::do_for_each(alloc_map, [&t](auto& p) {
+    auto writer = p.first;
+    auto& extents = p.second;
+    return writer->alloc_write_ool_extents(t, extents);
+  });
+}
+
+ExtentPlacementManager::alloc_paddr_iertr::future<>
+ExtentPlacementManager::write_preallocated_ool_extents(
+    Transaction &t,
+    std::list<LogicalCachedExtentRef> extents)
+{
+  LOG_PREFIX(ExtentPlacementManager::write_preallocated_ool_extents);
+  DEBUGT("start with {} allocated extents",
+         t, extents.size());
+  assert(writer_refs.size());
+  return seastar::do_with(
+      std::map<ExtentOolWriter*, std::list<LogicalCachedExtentRef>>(),
+      [this, &t, extents=std::move(extents)](auto& alloc_map) {
+    for (auto& extent : extents) {
+      auto writer_ptr = get_writer(
+          extent->get_user_hint(),
+          get_extent_category(extent->get_type()),
+          extent->get_rewrite_generation());
       alloc_map[writer_ptr].emplace_back(extent);
     }
     return trans_intr::do_for_each(alloc_map, [&t](auto& p) {
@@ -270,10 +370,16 @@ ExtentPlacementManager::close()
   LOG_PREFIX(ExtentPlacementManager::close);
   INFO("started");
   return crimson::do_for_each(data_writers_by_gen, [](auto &writer) {
-    return writer->close();
+    if (writer) {
+      return writer->close();
+    }
+    return close_ertr::now();
   }).safe_then([this] {
     return crimson::do_for_each(md_writers_by_gen, [](auto &writer) {
-      return writer->close();
+      if (writer) {
+	return writer->close();
+      }
+      return close_ertr::now();
     });
   });
 }
@@ -284,7 +390,12 @@ void ExtentPlacementManager::BackgroundProcess::log_state(const char *caller) co
   DEBUG("caller {}, {}, {}",
         caller,
         JournalTrimmerImpl::stat_printer_t{*trimmer, true},
-        AsyncCleaner::stat_printer_t{*cleaner, true});
+        AsyncCleaner::stat_printer_t{*main_cleaner, true});
+  if (has_cold_tier()) {
+    DEBUG("caller {}, cold_cleaner: {}",
+          caller,
+          AsyncCleaner::stat_printer_t{*cold_cleaner, true});
+  }
 }
 
 void ExtentPlacementManager::BackgroundProcess::start_background()
@@ -292,7 +403,11 @@ void ExtentPlacementManager::BackgroundProcess::start_background()
   LOG_PREFIX(BackgroundProcess::start_background);
   INFO("{}, {}",
        JournalTrimmerImpl::stat_printer_t{*trimmer, true},
-       AsyncCleaner::stat_printer_t{*cleaner, true});
+       AsyncCleaner::stat_printer_t{*main_cleaner, true});
+  if (has_cold_tier()) {
+    INFO("cold_cleaner: {}",
+         AsyncCleaner::stat_printer_t{*cold_cleaner, true});
+  }
   ceph_assert(trimmer->check_is_ready());
   ceph_assert(state == state_t::SCAN_SPACE);
   assert(!is_running());
@@ -322,7 +437,11 @@ ExtentPlacementManager::BackgroundProcess::stop_background()
     LOG_PREFIX(BackgroundProcess::stop_background);
     INFO("done, {}, {}",
          JournalTrimmerImpl::stat_printer_t{*trimmer, true},
-         AsyncCleaner::stat_printer_t{*cleaner, true});
+         AsyncCleaner::stat_printer_t{*main_cleaner, true});
+    if (has_cold_tier()) {
+      INFO("done, cold_cleaner: {}",
+           AsyncCleaner::stat_printer_t{*cold_cleaner, true});
+    }
     // run_until_halt() can be called at HALT
   });
 }
@@ -355,44 +474,50 @@ ExtentPlacementManager::BackgroundProcess::run_until_halt()
 
 seastar::future<>
 ExtentPlacementManager::BackgroundProcess::reserve_projected_usage(
-    std::size_t projected_usage)
+    io_usage_t usage)
 {
-  ceph_assert(is_ready());
+  if (!is_ready()) {
+    return seastar::now();
+  }
   ceph_assert(!blocking_io);
   // The pipeline configuration prevents another IO from entering
   // prepare until the prior one exits and clears this.
   ++stats.io_count;
-  bool is_blocked = false;
-  if (trimmer->should_block_io_on_trim()) {
-    is_blocked = true;
-    ++stats.io_blocked_count_trim;
-  }
-  if (cleaner->should_block_io_on_clean()) {
-    is_blocked = true;
-    ++stats.io_blocked_count_clean;
-  }
-  if (is_blocked) {
+
+  auto res = try_reserve_io(usage);
+  if (res.is_successful()) {
+    return seastar::now();
+  } else {
+    abort_io_usage(usage, res);
+    if (!res.reserve_inline_success) {
+      ++stats.io_blocked_count_trim;
+    }
+    if (!res.cleaner_result.is_successful()) {
+      ++stats.io_blocked_count_clean;
+    }
     ++stats.io_blocking_num;
     ++stats.io_blocked_count;
     stats.io_blocked_sum += stats.io_blocking_num;
-  }
-  return seastar::do_until(
-    [this] {
-      log_state("reserve_projected_usage(await_hard_limits)");
-      return !should_block_io();
-    },
-    [this] {
+
+    return seastar::repeat([this, usage] {
       blocking_io = seastar::promise<>();
-      return blocking_io->get_future();
-    }
-  ).then([this, is_blocked, projected_usage] {
-    ceph_assert(!blocking_io);
-    if (is_blocked) {
-      assert(stats.io_blocking_num > 0);
-      --stats.io_blocking_num;
-    }
-    cleaner->reserve_projected_usage(projected_usage);
-  });
+      return blocking_io->get_future(
+      ).then([this, usage] {
+        ceph_assert(!blocking_io);
+        auto res = try_reserve_io(usage);
+        if (res.is_successful()) {
+          assert(stats.io_blocking_num == 1);
+          --stats.io_blocking_num;
+          return seastar::make_ready_future<seastar::stop_iteration>(
+            seastar::stop_iteration::yes);
+        } else {
+          abort_io_usage(usage, res);
+          return seastar::make_ready_future<seastar::stop_iteration>(
+            seastar::stop_iteration::no);
+        }
+      });
+    });
+  }
 }
 
 seastar::future<>
@@ -421,33 +546,195 @@ ExtentPlacementManager::BackgroundProcess::run()
   });
 }
 
+/**
+ * Reservation Process
+ *
+ * Most of transctions need to reserve its space usage before performing the
+ * ool writes and committing transactions. If the space reservation is
+ * unsuccessful, the current transaction is blocked, and waits for new
+ * background transactions to finish.
+ *
+ * The following are the reservation requirements for each transaction type:
+ * 1. MUTATE transaction:
+ *      (1) inline usage on the trimmer,
+ *      (2) inline usage with OOL usage on the main cleaner,
+ *      (3) cold OOL usage to the cold cleaner(if it exists).
+ * 2. TRIM_DIRTY/TRIM_ALLOC transaction:
+ *      (1) all extents usage on the main cleaner,
+ *      (2) usage on the cold cleaner(if it exists)
+ * 3. CLEANER_MAIN:
+ *      (1) cleaned extents size on the cold cleaner(if it exists).
+ * 4. CLEANER_COLD transction does not require space reservation.
+ *
+ * The reserve implementation should satisfy the following conditions:
+ * 1. The reservation should be atomic. If a reservation involves several reservations,
+ *    such as the MUTATE transaction that needs to reserve space on both the trimmer
+ *    and cleaner at the same time, the successful condition is that all of its
+ *    sub-reservations succeed. If one or more operations fail, the entire reservation
+ *    fails, and the successful operation should be reverted.
+ * 2. The reserve/block relationship should form a DAG to avoid deadlock. For example,
+ *    TRIM_ALLOC transaction might be blocked by cleaner due to the failure of reserving
+ *    on the cleaner. In such cases, the cleaner must not reserve space on the trimmer
+ *    since the trimmer is already blocked by itself.
+ *
+ * Finally the reserve relationship can be represented as follows:
+ *
+ *    +-------------------------+----------------+
+ *    |                         |                |
+ *    |                         v                v
+ * MUTATE ---> TRIM_* ---> CLEANER_MAIN ---> CLEANER_COLD
+ *              |                                ^
+ *              |                                |
+ *              +--------------------------------+
+ */
+bool ExtentPlacementManager::BackgroundProcess::try_reserve_cold(std::size_t usage)
+{
+  if (has_cold_tier()) {
+    return cold_cleaner->try_reserve_projected_usage(usage);
+  } else {
+    assert(usage == 0);
+    return true;
+  }
+}
+void ExtentPlacementManager::BackgroundProcess::abort_cold_usage(
+  std::size_t usage, bool success)
+{
+  if (has_cold_tier() && success) {
+    cold_cleaner->release_projected_usage(usage);
+  }
+}
+
+reserve_cleaner_result_t
+ExtentPlacementManager::BackgroundProcess::try_reserve_cleaner(
+  const cleaner_usage_t &usage)
+{
+  return {
+    main_cleaner->try_reserve_projected_usage(usage.main_usage),
+    try_reserve_cold(usage.cold_ool_usage)
+  };
+}
+
+void ExtentPlacementManager::BackgroundProcess::abort_cleaner_usage(
+  const cleaner_usage_t &usage,
+  const reserve_cleaner_result_t &result)
+{
+  if (result.reserve_main_success) {
+    main_cleaner->release_projected_usage(usage.main_usage);
+  }
+  abort_cold_usage(usage.cold_ool_usage, result.reserve_cold_success);
+}
+
+reserve_io_result_t
+ExtentPlacementManager::BackgroundProcess::try_reserve_io(
+  const io_usage_t &usage)
+{
+  return {
+    trimmer->try_reserve_inline_usage(usage.inline_usage),
+    try_reserve_cleaner(usage.cleaner_usage)
+  };
+}
+
+void ExtentPlacementManager::BackgroundProcess::abort_io_usage(
+  const io_usage_t &usage,
+  const reserve_io_result_t &result)
+{
+  if (result.reserve_inline_success) {
+    trimmer->release_inline_usage(usage.inline_usage);
+  }
+  abort_cleaner_usage(usage.cleaner_usage, result.cleaner_result);
+}
+
 seastar::future<>
 ExtentPlacementManager::BackgroundProcess::do_background_cycle()
 {
   assert(is_ready());
-  if (trimmer->should_trim_alloc()) {
-    return trimmer->trim_alloc(
-    ).handle_error(
-      crimson::ct_error::assert_all{
-	"do_background_cycle encountered invalid error in trim_alloc"
-      }
-    );
-  } else if (trimmer->should_trim_dirty()) {
-    return trimmer->trim_dirty(
-    ).handle_error(
-      crimson::ct_error::assert_all{
-	"do_background_cycle encountered invalid error in trim_dirty"
-      }
-    );
-  } else if (cleaner->should_clean_space()) {
-    return cleaner->clean_space(
-    ).handle_error(
-      crimson::ct_error::assert_all{
-	"do_background_cycle encountered invalid error in clean_space"
-      }
-    );
+  bool should_trim = trimmer->should_trim();
+  bool proceed_trim = false;
+  auto trim_size = trimmer->get_trim_size_per_cycle();
+  cleaner_usage_t trim_usage{
+    trim_size,
+    // We take a cautious policy here that the trimmer also reserves
+    // the max value on cold cleaner even if no extents will be rewritten
+    // to the cold tier. Cleaner also takes the same policy.
+    // The reason is that we don't know the exact value of reservation until
+    // the construction of trimmer transaction completes after which the reservation
+    // might fail then the trimmer is possible to be invalidated by cleaner.
+    // Reserving the max size at first could help us avoid these trouble.
+    has_cold_tier() ? trim_size : 0
+  };
+
+  reserve_cleaner_result_t trim_reserve_res;
+  if (should_trim) {
+    trim_reserve_res = try_reserve_cleaner(trim_usage);
+    if (trim_reserve_res.is_successful()) {
+      proceed_trim = true;
+    } else {
+      abort_cleaner_usage(trim_usage, trim_reserve_res);
+    }
+  }
+
+  if (proceed_trim) {
+    return trimmer->trim(
+    ).finally([this, trim_usage] {
+      abort_cleaner_usage(trim_usage, {true, true});
+    });
   } else {
-    return seastar::now();
+    bool should_clean_main =
+      main_cleaner_should_run() ||
+      // make sure cleaner will start
+      // when the trimmer should run but
+      // failed to reserve space.
+      (should_trim && !proceed_trim &&
+       !trim_reserve_res.reserve_main_success);
+    bool proceed_clean_main = false;
+
+    auto main_cold_usage = main_cleaner->get_reclaim_size_per_cycle();
+    if (should_clean_main) {
+      if (has_cold_tier()) {
+        proceed_clean_main = try_reserve_cold(main_cold_usage);
+      } else {
+        proceed_clean_main = true;
+      }
+    }
+
+    bool proceed_clean_cold = false;
+    if (has_cold_tier() &&
+        (cold_cleaner->should_clean_space() ||
+         (should_trim && !proceed_trim &&
+          !trim_reserve_res.reserve_cold_success) ||
+         (should_clean_main && !proceed_clean_main))) {
+      proceed_clean_cold = true;
+    }
+
+    if (!proceed_clean_main && !proceed_clean_cold) {
+      ceph_abort("no background process will start");
+    }
+    return seastar::when_all(
+      [this, proceed_clean_main, main_cold_usage] {
+        if (!proceed_clean_main) {
+          return seastar::now();
+        }
+        return main_cleaner->clean_space(
+        ).handle_error(
+          crimson::ct_error::assert_all{
+            "do_background_cycle encountered invalid error in main clean_space"
+          }
+        ).finally([this, main_cold_usage] {
+          abort_cold_usage(main_cold_usage, true);
+        });
+      },
+      [this, proceed_clean_cold] {
+        if (!proceed_clean_cold) {
+          return seastar::now();
+        }
+        return cold_cleaner->clean_space(
+        ).handle_error(
+          crimson::ct_error::assert_all{
+            "do_background_cycle encountered invalid error in cold clean_space"
+          }
+        );
+      }
+    ).discard_result();
   }
 }
 
@@ -465,6 +752,56 @@ void ExtentPlacementManager::BackgroundProcess::register_metrics()
                      sm::description("IOs that are blocked by cleaning")),
     sm::make_counter("io_blocked_sum", stats.io_blocked_sum,
                      sm::description("the sum of blocking IOs"))
+  });
+}
+
+RandomBlockOolWriter::alloc_write_iertr::future<>
+RandomBlockOolWriter::alloc_write_ool_extents(
+  Transaction& t,
+  std::list<LogicalCachedExtentRef>& extents)
+{
+  if (extents.empty()) {
+    return alloc_write_iertr::now();
+  }
+  return seastar::with_gate(write_guard, [this, &t, &extents] {
+    return do_write(t, extents);
+  });
+}
+
+RandomBlockOolWriter::alloc_write_iertr::future<>
+RandomBlockOolWriter::do_write(
+  Transaction& t,
+  std::list<LogicalCachedExtentRef>& extents)
+{
+  LOG_PREFIX(RandomBlockOolWriter::do_write);
+  assert(!extents.empty());
+  DEBUGT("start with {} allocated extents",
+         t, extents.size());
+  return trans_intr::do_for_each(extents,
+    [this, &t, FNAME](auto& ex) {
+    auto paddr = ex->get_paddr();
+    assert(paddr.is_absolute());
+    RandomBlockManager * rbm = rb_cleaner->get_rbm(paddr); 
+    assert(rbm);
+    TRACE("extent {}, allocated addr {}", fmt::ptr(ex.get()), paddr);
+    auto& stats = t.get_ool_write_stats();
+    stats.extents.num += 1;
+    stats.extents.bytes += ex->get_length();
+    stats.num_records += 1;
+
+    ex->prepare_write();
+    return rbm->write(paddr,
+      ex->get_bptr()
+    ).handle_error(
+      alloc_write_iertr::pass_further{},
+      crimson::ct_error::assert_all{
+	"Invalid error when writing record"}
+    ).safe_then([&t, &ex, paddr, FNAME]() {
+      TRACET("ool extent written at {} -- {}",
+	     t, paddr, *ex);
+      t.mark_allocated_extent_ool(ex);
+      return alloc_write_iertr::now();
+    });
   });
 }
 

@@ -42,6 +42,7 @@
     object stat                stat an object for its metadata
     object unlink              unlink object from bucket index
     object rewrite             rewrite the specified object
+    object reindex             reindex the object(s) indicated by --bucket and either --object or --objects-file
     objects expire             run expired objects cleanup
     objects expire-stale list  list stale expired objects (caused by reshard)
     objects expire-stale rm    remove stale expired objects
@@ -178,13 +179,9 @@
     mfa remove                 delete MFA TOTP token
     mfa check                  check MFA TOTP token
     mfa resync                 re-sync MFA TOTP token
-    topic list                 list bucket notifications/pubsub topics
-    topic get                  get a bucket notifications/pubsub topic
-    topic rm                   remove a bucket notifications/pubsub topic
-    subscription get           get a pubsub subscription definition
-    subscription rm            remove a pubsub subscription
-    subscription pull          show events in a pubsub subscription
-    subscription ack           ack (remove) an events in a pubsub subscription
+    topic list                 list bucket notifications topics
+    topic get                  get a bucket notifications topic
+    topic rm                   remove a bucket notifications topic
     script put                 upload a lua script to a context
     script get                 get the lua script of a context
     script rm                  remove the lua scripts of a context
@@ -215,6 +212,7 @@
      --bucket=<bucket>         Specify the bucket name. Also used by the quota command.
      --pool=<pool>             Specify the pool name. Also used to scan for leaked rados objects.
      --object=<object>         object name
+     --objects-file=<file>     file containing a list of object names to process
      --object-version=<version>         object version
      --date=<date>             date in the format yyyy-mm-dd
      --start-date=<date>       start date in the format yyyy-mm-dd
@@ -266,6 +264,9 @@
      --data-extra-pool=<pool>  placement target data extra (non-ec) pool
      --placement-index-type=<type>
                                placement target index type (normal, indexless, or #id)
+     --placement-inline-data=<true>
+                               set whether the placement target is configured to store a data
+                               chunk inline in head objects
      --compression=<type>      placement target compression type (plugin name or empty/none)
      --tier-type=<type>        zone tier type
      --tier-config=<k>=<v>[,...]
@@ -297,7 +298,7 @@
      --show-log-sum=<flag>     enable/disable dump of log summation on log show
      --skip-zero-entries       log show only dumps entries that don't have zero value
                                in one of the numeric field
-     --infile=<file>           specify a file to read in when setting data
+     --infile=<file>           file to read in when setting data
      --categories=<list>       comma separated list of categories, used in usage show
      --caps=<caps>             list of caps (e.g., "usage=read, write; user=read")
      --op-mask=<op-mask>       permission of user's operations (e.g., "read, write, delete, *")
@@ -357,10 +358,8 @@
      --totp-window             the number of TOTP tokens that are checked before and after the current token when validating token
      --totp-pin                the valid value of a TOTP token at a certain time
   
-  Bucket notifications/pubsub options:
-     --topic                   bucket notifications/pubsub topic name
-     --subscription            pubsub subscription name
-     --event-id                event id in a pubsub subscription
+  Bucket notifications options:
+     --topic                   bucket notifications topic name
   
   Script options:
      --context                 context in which the script runs. one of: prerequest, postrequest, background, getdata, putdata

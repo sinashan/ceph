@@ -13,6 +13,7 @@ replicate and redistribute data dynamically.
 
 .. image:: images/stack.png
 
+.. _arch-ceph-storage-cluster:
 
 The Ceph Storage Cluster
 ========================
@@ -135,6 +136,8 @@ Placement of Replicated Data`_.
 
 .. index:: architecture; cluster map
 
+.. _architecture_cluster_map:
+
 Cluster Map
 ~~~~~~~~~~~
 
@@ -195,6 +198,8 @@ current state of the cluster.
 For details on configuring monitors, see the `Monitor Config Reference`_.
 
 .. index:: architecture; high availability authentication
+
+.. _arch_high_availability_authentication:
 
 High Availability Authentication
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -581,7 +586,7 @@ objects.
 Peering and Sets
 ~~~~~~~~~~~~~~~~
 
-In previous sections, we noted that Ceph OSD Daemons check each others
+In previous sections, we noted that Ceph OSD Daemons check each other's
 heartbeats and report back to the Ceph Monitor. Another thing Ceph OSD daemons
 do is called 'peering', which is the process of bringing all of the OSDs that
 store a Placement Group (PG) into agreement about the state of all of the

@@ -88,17 +88,17 @@ public:
 };
 
 
-class S3FilterStore : public FilterStore {
+class S3FilterDriver : public FilterDriver {
   private:
 
   public:
     CephContext *_cct;
     const DoutPrefixProvider* _dpp;
-    S3FilterStore(Store* _next) : FilterStore(_next) 
+    S3FilterDriver(Driver* _next) : FilterDriver(_next) 
     {
       //d4n_cache = new RGWD4NCache();
     }
-    virtual ~S3FilterStore() {
+    virtual ~S3FilterDriver() {
       //delete d4n_cache;
     }
 
@@ -122,7 +122,7 @@ class S3FilterStore : public FilterStore {
 
     virtual std::unique_ptr<Writer> get_atomic_writer(const DoutPrefixProvider *dpp,
 				  optional_yield y,
-				  std::unique_ptr<rgw::sal::Object> _head_obj,
+				  rgw::sal::Object* obj,
 				  const rgw_user& owner,
 				  const rgw_placement_rule *ptail_placement_rule,
 				  uint64_t olh_epoch,
@@ -137,15 +137,15 @@ class S3FilterStore : public FilterStore {
 	*/
 
 	/* Internal to S3 Filter */
-	Store* get_next() {return next; }
+	Driver* get_next() {return next; }
 };
 
 class S3FilterUser : public FilterUser {
   private:
-    S3FilterStore* filter;
+    S3FilterDriver* filter;
 
   public:
-    S3FilterUser(std::unique_ptr<User> _next, S3FilterStore* _filter) : 
+    S3FilterUser(std::unique_ptr<User> _next, S3FilterDriver* _filter) : 
       FilterUser(std::move(_next)),
       filter(_filter) {}
     virtual ~S3FilterUser() = default;
@@ -172,16 +172,16 @@ class S3FilterBucket : public FilterBucket {
   protected:
   
   private:
-    S3FilterStore* filter;
+    S3FilterDriver* filter;
 	//ceph::real_time mtime;
 	//Attrs attrs;
 
   public:
-    S3FilterBucket(std::unique_ptr<Bucket> _next, User* _user, S3FilterStore* _filter) :
+    S3FilterBucket(std::unique_ptr<Bucket> _next, User* _user, S3FilterDriver* _filter) :
       FilterBucket(std::move(_next), _user), 
       filter(_filter) {}
 	/*
-    S3FilterBucket(std::unique_ptr<Bucket> _next, const rgw_bucket& _b, User* _user, S3FilterStore* _filter):
+    S3FilterBucket(std::unique_ptr<Bucket> _next, const rgw_bucket& _b, User* _user, S3FilterDriver* _filter):
 	  FilterBucket(std::move(_next), _user), 
       filter(_filter) 
 	 { ent.bucket = _b; info.bucket = _b; }
@@ -219,7 +219,7 @@ class S3FilterBucket : public FilterBucket {
 
 class S3FilterObject : public FilterObject {
   private:
-    S3FilterStore* filter;
+    S3FilterDriver* filter;
 
   public:
     struct S3FilterReadOp : FilterReadOp {
@@ -249,11 +249,11 @@ class S3FilterObject : public FilterObject {
       virtual int delete_obj(const DoutPrefixProvider* dpp, optional_yield y) override;
     };
 
-    S3FilterObject(std::unique_ptr<Object> _next, S3FilterStore* _filter) : FilterObject(std::move(_next)),
+    S3FilterObject(std::unique_ptr<Object> _next, S3FilterDriver* _filter) : FilterObject(std::move(_next)),
 									      filter(_filter) {}
-    S3FilterObject(std::unique_ptr<Object> _next, Bucket* _bucket, S3FilterStore* _filter) : FilterObject(std::move(_next), _bucket),
+    S3FilterObject(std::unique_ptr<Object> _next, Bucket* _bucket, S3FilterDriver* _filter) : FilterObject(std::move(_next), _bucket),
 											       filter(_filter) {}
-    S3FilterObject(S3FilterObject& _o, S3FilterStore* _filter) : FilterObject(_o),
+    S3FilterObject(S3FilterObject& _o, S3FilterDriver* _filter) : FilterObject(_o),
 								    filter(_filter) {}
     virtual ~S3FilterObject() = default;
 
@@ -273,12 +273,12 @@ class S3FilterObject : public FilterObject {
 
 	virtual std::unique_ptr<ReadOp> get_read_op() override;
     virtual std::unique_ptr<DeleteOp> get_delete_op() override;
-    S3FilterStore* get_filter() {return filter;};
+    S3FilterDriver* get_filter() {return filter;};
 };
 
 class S3FilterWriter : public FilterWriter {
 private:
-  S3FilterStore* filter;
+  S3FilterDriver* filter;
   S3FilterUser *user; 
   const DoutPrefixProvider* save_dpp;
   bool atomic;
@@ -286,14 +286,14 @@ private:
   bufferlist send_data;
 
 public:
-  S3FilterWriter(std::unique_ptr<Writer> _next, S3FilterStore* _filter, std::unique_ptr<Object> _head_obj, 
-					  const DoutPrefixProvider* _dpp) : FilterWriter(std::move(_next), std::move(_head_obj)),
+  S3FilterWriter(std::unique_ptr<Writer> _next, S3FilterDriver* _filter, Object* obj, 
+					  const DoutPrefixProvider* _dpp) : FilterWriter(std::move(_next), obj),
 					  filter(_filter),
 					  save_dpp(_dpp), atomic(false) {
 					  }
 
-  S3FilterWriter(std::unique_ptr<Writer> _next, S3FilterStore* _filter, std::unique_ptr<Object> _head_obj, 
-					  const DoutPrefixProvider* _dpp, bool _atomic) : FilterWriter(std::move(_next), std::move(_head_obj)),
+  S3FilterWriter(std::unique_ptr<Writer> _next, S3FilterDriver* _filter, Object* obj, 
+					  const DoutPrefixProvider* _dpp, bool _atomic) : FilterWriter(std::move(_next), obj),
 					  filter(_filter),
 					  save_dpp(_dpp), atomic(_atomic) {
 						}
@@ -315,19 +315,19 @@ public:
 
 class S3InternalFilterWriter : public FilterWriter {
 private:
-  S3FilterStore* filter; 
+  S3FilterDriver* filter; 
   const DoutPrefixProvider* dpp;
 
 public:
-  S3InternalFilterWriter(std::unique_ptr<Writer> _next, S3FilterStore* _filter, std::unique_ptr<Object> _head_obj, 
-					  const DoutPrefixProvider* _dpp) : FilterWriter(std::move(_next), std::move(_head_obj)),
+  S3InternalFilterWriter(std::unique_ptr<Writer> _next, S3FilterDriver* _filter, Object* obj, 
+					  const DoutPrefixProvider* _dpp) : FilterWriter(std::move(_next), obj),
 					  filter(_filter),
 					  dpp(_dpp) {}
 
   virtual ~S3InternalFilterWriter() = default;
   
   //This is for TEST
-  S3FilterStore* get_filter(){return filter;};
+  S3FilterDriver* get_filter(){return filter;};
    
   virtual int prepare(optional_yield y) { return next->prepare(y); }
   virtual int process(bufferlist&& data, uint64_t offset) override;

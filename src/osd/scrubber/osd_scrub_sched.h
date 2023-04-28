@@ -77,7 +77,7 @@
 └─────────────────────────────────┘
 
 
-SqrubQueue interfaces (main functions):
+ScrubQueue interfaces (main functions):
 
 <1> - OSD/PG resources management:
 
@@ -340,7 +340,7 @@ class ScrubQueue {
   void register_with_osd(ScrubJobRef sjob, const sched_params_t& suggested);
 
   /**
-   * modify a scrub-job's schduled time and deadline
+   * modify a scrub-job's scheduled time and deadline
    *
    * There are 3 argument combinations to consider:
    * - 'must' is asserted, and the suggested time is 'scrub_must_stamp':
@@ -389,15 +389,16 @@ class ScrubQueue {
   int get_blocked_pgs_count() const;
 
   /**
-   * Pacing the scrub operation by inserting delays (mostly between chunks)
+   * scrub_sleep_time
    *
-   * Special handling for regular scrubs that continued into "no scrub" times.
-   * Scrubbing will continue, but the delays will be controlled by a separate
-   * (read - with higher value) configuration element
-   * (osd_scrub_extended_sleep).
+   * Returns std::chrono::milliseconds indicating how long to wait between
+   * chunks.
+   *
+   * Implementation Note: Returned value will either osd_scrub_sleep or
+   * osd_scrub_extended_sleep depending on must_scrub_param and time
+   * of day (see configs osd_scrub_begin*)
    */
-  double scrub_sleep_time(bool must_scrub) const;  /// \todo (future) return
-						   /// milliseconds
+  std::chrono::milliseconds scrub_sleep_time(bool must_scrub) const;
 
   /**
    *  called every heartbeat to update the "daily" load average
@@ -468,7 +469,7 @@ class ScrubQueue {
   mutable ceph::mutex resource_lock =
     ceph::make_mutex("ScrubQueue::resource_lock");
 
-  // the counters used to manage scrub activity parallelism:
+  /// the counters used to manage scrub activity parallelism:
   int scrubs_local{0};
   int scrubs_remote{0};
 

@@ -100,6 +100,10 @@
     color: vv.$gray-200;
   }
 
+  .no-hover:hover {
+    background-color: vv.$secondary !important;
+  }
+
   @media (min-width: vv.$screen-md-min) {
     .cd-navbar-utility {
       border-bottom: 0;
@@ -221,6 +225,7 @@ $sidebar-width: 200px;
       content: '\f054';
       font-family: 'ForkAwesome';
       font-size: 1rem;
+      margin-top: 2px;
       position: absolute;
       right: 20px;
       transition: transform 0.3s ease-in-out;

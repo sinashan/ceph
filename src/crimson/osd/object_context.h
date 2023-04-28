@@ -62,7 +62,6 @@ class ObjectContext : public ceph::common::intrusive_lru_base<
     hobject_t, ObjectContext, obc_to_hoid<ObjectContext>>>
 {
 public:
-  Ref head; // Ref defined as part of ceph::common::intrusive_lru_base
   ObjectState obs;
   SnapSetContextRef ssc;
   // the watch / notify machinery rather stays away from the hot and
@@ -81,21 +80,14 @@ public:
     return get_oid().is_head();
   }
 
-  Ref get_head_obc() const {
-    return head;
-  }
-
   hobject_t get_head_oid() const {
     return get_oid().get_head();
   }
 
-  const SnapSet &get_ro_ss() const {
-    if (is_head()) {
-      ceph_assert(ssc);
-      return ssc->snapset;
-    } else {
-      return head->get_ro_ss();
-    }
+  const SnapSet &get_head_ss() const {
+    ceph_assert(is_head());
+    ceph_assert(ssc);
+    return ssc->snapset;
   }
 
   void set_head_state(ObjectState &&_obs, SnapSetContextRef &&_ssc) {
@@ -263,9 +255,22 @@ public:
     return obc_lru.get(hoid);
   }
 
+  void clear_range(const hobject_t &from,
+                   const hobject_t &to) {
+    obc_lru.clear_range(from, to);
+  }
+
+  template <class F>
+  void for_each(F&& f) {
+    obc_lru.for_each(std::forward<F>(f));
+  }
+
   const char** get_tracked_conf_keys() const final;
   void handle_conf_change(const crimson::common::ConfigProxy& conf,
                           const std::set <std::string> &changed) final;
 };
+
+std::optional<hobject_t> resolve_oid(const SnapSet &ss,
+                                     const hobject_t &oid);
 
 } // namespace crimson::osd

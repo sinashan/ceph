@@ -10,7 +10,7 @@
 
 using namespace std;
 
-RGWRESTConn::RGWRESTConn(CephContext *_cct, rgw::sal::Store* store,
+RGWRESTConn::RGWRESTConn(CephContext *_cct, rgw::sal::Driver* driver,
                          const string& _remote_id,
                          const list<string>& remote_endpoints,
                          std::optional<string> _api_name,
@@ -21,9 +21,9 @@ RGWRESTConn::RGWRESTConn(CephContext *_cct, rgw::sal::Store* store,
     api_name(_api_name),
     host_style(_host_style)
 {
-  if (store) {
-    key = store->get_zone()->get_system_key();
-    self_zone_group = store->get_zone()->get_zonegroup().get_id();
+  if (driver) {
+    key = driver->get_zone()->get_system_key();
+    self_zone_group = driver->get_zone()->get_zonegroup().get_id();
   }
 }
 
@@ -127,6 +127,27 @@ int RGWRESTConn::forward_iam_request(const DoutPrefixProvider *dpp, const RGWAcc
   return req.forward_request(dpp, key, info, max_response, inbl, outbl, y, service);
 }
 
+int RGWRESTConn::put_obj_send_init(const rgw_obj& obj, const rgw_http_param_pair *extra_params, RGWRESTStreamS3PutObj **req)
+{
+  string url;
+  int ret = get_url(url);
+  if (ret < 0)
+    return ret;
+
+  rgw_user uid;
+  param_vec_t params;
+  populate_params(params, &uid, self_zone_group);
+
+  if (extra_params) {
+    append_param_list(params, extra_params);
+  }
+
+  RGWRESTStreamS3PutObj *wr = new RGWRESTStreamS3PutObj(cct, "PUT", url, NULL, &params, api_name, host_style);
+  wr->send_init(obj);
+  *req = wr;
+  return 0;
+}
+
 int RGWRESTConn::put_obj_send_init(rgw::sal::Object* obj, const rgw_http_param_pair *extra_params, RGWRESTStreamS3PutObj **req)
 {
   string url;
@@ -144,6 +165,23 @@ int RGWRESTConn::put_obj_send_init(rgw::sal::Object* obj, const rgw_http_param_p
 
   RGWRESTStreamS3PutObj *wr = new RGWRESTStreamS3PutObj(cct, "PUT", url, NULL, &params, api_name, host_style);
   wr->send_init(obj);
+  *req = wr;
+  return 0;
+}
+
+int RGWRESTConn::put_obj_async_init(const DoutPrefixProvider *dpp, const rgw_user& uid, const rgw_obj& obj,
+                                    map<string, bufferlist>& attrs,
+                                    RGWRESTStreamS3PutObj **req)
+{
+  string url;
+  int ret = get_url(url);
+  if (ret < 0)
+    return ret;
+
+  param_vec_t params;
+  populate_params(params, &uid, self_zone_group);
+  RGWRESTStreamS3PutObj *wr = new RGWRESTStreamS3PutObj(cct, "PUT", url, NULL, &params, api_name, host_style);
+  wr->put_obj_init(dpp, key, obj, attrs);
   *req = wr;
   return 0;
 }
@@ -198,7 +236,7 @@ static void set_header(T val, map<string, string>& headers, const string& header
 }
 
 
-int RGWRESTConn::get_obj(const DoutPrefixProvider *dpp, const rgw_user& uid, req_info *info /* optional */, const rgw::sal::Object* obj,
+int RGWRESTConn::get_obj(const DoutPrefixProvider *dpp, const rgw_user& uid, req_info *info /* optional */, rgw::sal::Object* obj,
                          const real_time *mod_ptr, const real_time *unmod_ptr,
                          uint32_t mod_zone_id, uint64_t mod_pg_ver,
                          bool prepend_metadata, bool get_op, bool rgwx_stat,
@@ -219,7 +257,7 @@ int RGWRESTConn::get_obj(const DoutPrefixProvider *dpp, const rgw_user& uid, req
   return get_obj(dpp, obj, params, send, req);
 }
 
-int RGWRESTConn::get_obj(const DoutPrefixProvider *dpp, const rgw::sal::Object* obj, const get_obj_params& in_params, bool send, RGWRESTStreamRWRequest **req)
+int RGWRESTConn::get_obj(const DoutPrefixProvider *dpp, rgw::sal::Object* obj, const get_obj_params& in_params, bool send, RGWRESTStreamRWRequest **req)
 {
   string url;
   int ret = get_url(url);
@@ -301,6 +339,112 @@ done_err:
   *req = nullptr;
   return r;
 }
+
+int RGWRESTConn::get_obj(const DoutPrefixProvider *dpp, const rgw_user& uid, req_info *info /* optional */, const rgw_obj& obj,
+                         const real_time *mod_ptr, const real_time *unmod_ptr,
+                         uint32_t mod_zone_id, uint64_t mod_pg_ver,
+                         bool prepend_metadata, bool get_op, bool rgwx_stat,
+                         bool sync_manifest, bool skip_decrypt,
+                         bool send, RGWHTTPStreamRWRequest::ReceiveCB *cb, RGWRESTStreamRWRequest **req)
+{
+  get_obj_params params;
+  params.uid = uid;
+  params.info = info;
+  params.mod_ptr = mod_ptr;
+  params.mod_pg_ver = mod_pg_ver;
+  params.prepend_metadata = prepend_metadata;
+  params.get_op = get_op;
+  params.rgwx_stat = rgwx_stat;
+  params.sync_manifest = sync_manifest;
+  params.skip_decrypt = skip_decrypt;
+  params.cb = cb;
+  return get_obj(dpp, obj, params, send, req);
+}
+
+int RGWRESTConn::get_obj(const DoutPrefixProvider *dpp, const rgw_obj& obj, const get_obj_params& in_params, bool send, RGWRESTStreamRWRequest **req)
+{
+  string url;
+  int ret = get_url(url);
+  if (ret < 0)
+    return ret;
+
+  param_vec_t params;
+  populate_params(params, &in_params.uid, self_zone_group);
+  if (in_params.prepend_metadata) {
+    params.push_back(param_pair_t(RGW_SYS_PARAM_PREFIX "prepend-metadata", "true"));
+  }
+  if (in_params.rgwx_stat) {
+    params.push_back(param_pair_t(RGW_SYS_PARAM_PREFIX "stat", "true"));
+  }
+  if (in_params.sync_manifest) {
+    params.push_back(param_pair_t(RGW_SYS_PARAM_PREFIX "sync-manifest", ""));
+  }
+  if (in_params.skip_decrypt) {
+    params.push_back(param_pair_t(RGW_SYS_PARAM_PREFIX "skip-decrypt", ""));
+  }
+  if (!obj.key.instance.empty()) {
+    params.push_back(param_pair_t("versionId", obj.key.instance));
+  }
+  if (in_params.get_op) {
+    *req = new RGWRESTStreamReadRequest(cct, url, in_params.cb, NULL, &params, api_name, host_style);
+  } else {
+    *req = new RGWRESTStreamHeadRequest(cct, url, in_params.cb, NULL, &params, api_name);
+  }
+  map<string, string> extra_headers;
+  if (in_params.info) {
+    const auto& orig_map = in_params.info->env->get_map();
+
+    /* add original headers that start with HTTP_X_AMZ_ */
+    static constexpr char SEARCH_AMZ_PREFIX[] = "HTTP_X_AMZ_";
+    for (auto iter= orig_map.lower_bound(SEARCH_AMZ_PREFIX); iter != orig_map.end(); ++iter) {
+      const string& name = iter->first;
+      if (name == "HTTP_X_AMZ_DATE") /* don't forward date from original request */
+        continue;
+      if (name.compare(0, strlen(SEARCH_AMZ_PREFIX), SEARCH_AMZ_PREFIX) != 0)
+        break;
+      extra_headers[iter->first] = iter->second;
+    }
+  }
+
+  set_date_header(in_params.mod_ptr, extra_headers, in_params.high_precision_time, "HTTP_IF_MODIFIED_SINCE");
+  set_date_header(in_params.unmod_ptr, extra_headers, in_params.high_precision_time, "HTTP_IF_UNMODIFIED_SINCE");
+  if (!in_params.etag.empty()) {
+    set_header(in_params.etag, extra_headers, "HTTP_IF_MATCH");
+  }
+  if (in_params.mod_zone_id != 0) {
+    set_header(in_params.mod_zone_id, extra_headers, "HTTP_DEST_ZONE_SHORT_ID");
+  }
+  if (in_params.mod_pg_ver != 0) {
+    set_header(in_params.mod_pg_ver, extra_headers, "HTTP_DEST_PG_VER");
+  }
+  if (in_params.range_is_set) {
+    char buf[64];
+    snprintf(buf, sizeof(buf), "bytes=%lld-%lld", (long long)in_params.range_start, (long long)in_params.range_end);
+    set_header(buf, extra_headers, "RANGE");
+  }
+
+  int r = (*req)->send_prepare(dpp, key, extra_headers, obj);
+  if (r < 0) {
+    goto done_err;
+  }
+  
+  if (!send) {
+    return 0;
+  }
+
+  r = (*req)->send(nullptr);
+  if (r < 0) {
+    goto done_err;
+  }
+  return 0;
+done_err:
+  delete *req;
+  *req = nullptr;
+  return r;
+}
+
+
+
 
 int RGWRESTConn::complete_request(RGWRESTStreamRWRequest *req,
                                   string *etag,
@@ -389,7 +533,12 @@ int RGWRESTConn::send_resource(const DoutPrefixProvider *dpp, const std::string&
     return ret;
   }
 
-  return req.complete_request(y);
+  ret = req.complete_request(y);
+  if (ret < 0) {
+    ldpp_dout(dpp, 5) << __func__ << ": complete_request() resource=" << resource << " returned ret=" << ret << dendl;
+  }
+
+  return ret;
 }
 
 RGWRESTReadResource::RGWRESTReadResource(RGWRESTConn *_conn,

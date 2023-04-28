@@ -162,22 +162,22 @@ int RGWDelObjectCB::handle_data(bufferlist& bl, bool *pause){
     return 0;
 }
 
-int S3FilterStore::initialize(CephContext *cct, const DoutPrefixProvider *dpp)
+int S3FilterDriver::initialize(CephContext *cct, const DoutPrefixProvider *dpp)
 {
-  FilterStore::initialize(cct, dpp);
+  FilterDriver::initialize(cct, dpp);
   _cct = cct;
   _dpp = dpp; 
   return 0;
 }
 
-std::unique_ptr<User> S3FilterStore::get_user(const rgw_user &u)
+std::unique_ptr<User> S3FilterDriver::get_user(const rgw_user &u)
 {
   std::unique_ptr<User> user = next->get_user(u);
 
   return std::make_unique<S3FilterUser>(std::move(user), this);
 }
 
-std::unique_ptr<Object> S3FilterStore::get_object(const rgw_obj_key& k)
+std::unique_ptr<Object> S3FilterDriver::get_object(const rgw_obj_key& k)
 {
   std::unique_ptr<Object> o = next->get_object(k);
 
@@ -278,7 +278,7 @@ int S3FilterUser::create_bucket(const DoutPrefixProvider* dpp,
   return 0;
 }
 
-int S3FilterStore::get_bucket(const DoutPrefixProvider* dpp, User* u, const rgw_bucket& b, std::unique_ptr<Bucket>* bucket_out, optional_yield y)
+int S3FilterDriver::get_bucket(const DoutPrefixProvider* dpp, User* u, const rgw_bucket& b, std::unique_ptr<Bucket>* bucket_out, optional_yield y)
 {
   std::unique_ptr<Bucket> nb;
   int ret;
@@ -320,7 +320,7 @@ int S3FilterStore::get_bucket(const DoutPrefixProvider* dpp, User* u, const rgw_
   return 0;
 }
 
-int S3FilterStore::send_get_bucket(const DoutPrefixProvider* dpp, User* u, const rgw_bucket& b, optional_yield y, RGWHTTPStreamRWRequest::ReceiveCB *cb)
+int S3FilterDriver::send_get_bucket(const DoutPrefixProvider* dpp, User* u, const rgw_bucket& b, optional_yield y, RGWHTTPStreamRWRequest::ReceiveCB *cb)
 {
   int ret = 0; 
   ldpp_dout(dpp, 20) << " AMIN: " << __func__ << " : " << __LINE__ << dendl;
@@ -360,20 +360,20 @@ int S3FilterStore::send_get_bucket(const DoutPrefixProvider* dpp, User* u, const
 }
 
 //This is used to send data to remote over HTTP client
-std::unique_ptr<Writer> S3FilterStore::get_atomic_writer(const DoutPrefixProvider *dpp,
+std::unique_ptr<Writer> S3FilterDriver::get_atomic_writer(const DoutPrefixProvider *dpp,
 				  optional_yield y,
-				  std::unique_ptr<rgw::sal::Object> _head_obj,
+				  rgw::sal::Object* obj,
 				  const rgw_user& owner,
 				  const rgw_placement_rule *ptail_placement_rule,
 				  uint64_t olh_epoch,
 				  const std::string& unique_tag)
 {
-  std::unique_ptr<Object> no = nextObject(_head_obj.get())->clone();
-  std::unique_ptr<Writer> writer = next->get_atomic_writer(dpp, y, std::move(no),
+  //std::unique_ptr<Object> no = nextObject(obj.get())->clone();
+  std::unique_ptr<Writer> writer = next->get_atomic_writer(dpp, y, obj,
 							   owner, ptail_placement_rule,
 							   olh_epoch, unique_tag);
 
-  return std::make_unique<S3FilterWriter>(std::move(writer), this, std::move(_head_obj), dpp, true);
+  return std::make_unique<S3FilterWriter>(std::move(writer), this, obj, dpp, true);
   
 }
 
@@ -381,8 +381,8 @@ std::unique_ptr<Writer> S3FilterStore::get_atomic_writer(const DoutPrefixProvide
 
 int S3FilterWriter::prepare(optional_yield y)
 {
-  ldpp_dout(this->save_dpp, 20) << "AMIN " << __func__ << " : owner is : " << this->head_obj->get_bucket()->get_owner() << dendl;
-  this->user = (rgw::sal::S3FilterUser*) this->head_obj->get_bucket()->get_owner();
+  ldpp_dout(this->save_dpp, 20) << "AMIN " << __func__ << " : owner is : " << this->obj->get_bucket()->get_owner() << dendl;
+  this->user = (rgw::sal::S3FilterUser*) this->obj->get_bucket()->get_owner();
 
   string url ="https://" + this->filter->_cct->_conf->backend_url;
   HostStyle host_style = PathStyle;
@@ -390,12 +390,12 @@ int S3FilterWriter::prepare(optional_yield y)
   this->obj_wr = new RGWRESTStreamS3PutObj(this->filter->_cct, "PUT", url, NULL, NULL, "", host_style);
 
   RGWAccessKey accesskey;
-  getAccessSecretKeys(&accesskey, this->head_obj->get_bucket()->get_owner());
+  getAccessSecretKeys(&accesskey, this->obj->get_bucket()->get_owner());
 
   map<string, bufferlist> obj_attrs;
  
 
-  this->obj_wr->put_obj_init(this->save_dpp, accesskey, this->head_obj.get(), obj_attrs);
+  this->obj_wr->put_obj_init(this->save_dpp, accesskey, this->obj, obj_attrs);
 
   return 0;
 }
@@ -601,13 +601,13 @@ int S3FilterObject::S3FilterDeleteOp::delete_obj(const DoutPrefixProvider* dpp,
 }
 
 
-int S3FilterStore::get_bucket(User* u, const RGWBucketInfo& i, std::unique_ptr<Bucket>* bucket)
+int S3FilterDriver::get_bucket(User* u, const RGWBucketInfo& i, std::unique_ptr<Bucket>* bucket)
 {
   return this->get_bucket(this->_dpp, u, i.bucket,
 				bucket, null_yield);
 }
 
-int S3FilterStore::get_bucket(const DoutPrefixProvider* dpp, User* u, const std::string& tenant, const std::string& name, std::unique_ptr<Bucket>* bucket, optional_yield y)
+int S3FilterDriver::get_bucket(const DoutPrefixProvider* dpp, User* u, const std::string& tenant, const std::string& name, std::unique_ptr<Bucket>* bucket, optional_yield y)
 {
   return this->get_bucket(dpp, u, rgw_bucket(tenant,
 					name, ""),
@@ -648,7 +648,7 @@ int S3FilterUser::list_buckets(const DoutPrefixProvider* dpp, const std::string&
 
 /*
 //This is the basic writer to send data to the next
-std::unique_ptr<S3InternalFilterWriter> S3FilterStore::get_s3_atomic_writer(const DoutPrefixProvider *dpp,
+std::unique_ptr<S3InternalFilterWriter> S3FilterDriver::get_s3_atomic_writer(const DoutPrefixProvider *dpp,
 				  optional_yield y,
 				  S3FilterObject * _head_obj,
 				  const rgw_user& owner,
@@ -813,9 +813,9 @@ int D4NFilterObject::delete_obj_attrs(const DoutPrefixProvider* dpp, const char*
 
 extern "C" {
 
-rgw::sal::Store* newS3Filter(rgw::sal::Store* next)
+rgw::sal::Driver* newS3Filter(rgw::sal::Driver* next)
 {
-  rgw::sal::S3FilterStore* store = new rgw::sal::S3FilterStore(next);
+  rgw::sal::S3FilterDriver* store = new rgw::sal::S3FilterDriver(next);
 
   return store;
 }

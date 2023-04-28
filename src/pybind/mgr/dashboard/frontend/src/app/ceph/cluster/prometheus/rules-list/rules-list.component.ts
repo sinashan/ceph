@@ -4,12 +4,12 @@ import _ from 'lodash';
 
 import { PrometheusService } from '~/app/shared/api/prometheus.service';
 import { CellTemplate } from '~/app/shared/enum/cell-template.enum';
+import { PrometheusListHelper } from '~/app/shared/helpers/prometheus-list-helper';
 import { CdTableColumn } from '~/app/shared/models/cd-table-column';
 import { CdTableSelection } from '~/app/shared/models/cd-table-selection';
 import { PrometheusRule } from '~/app/shared/models/prometheus-alerts';
 import { DurationPipe } from '~/app/shared/pipes/duration.pipe';
 import { PrometheusAlertService } from '~/app/shared/services/prometheus-alert.service';
-import { PrometheusListHelper } from '../prometheus-list-helper';
 
 @Component({
   selector: 'cd-rules-list',
@@ -38,7 +38,7 @@ export class RulesListComponent extends PrometheusListHelper implements OnInit {
   ngOnInit() {
     super.ngOnInit();
     this.columns = [
-      { prop: 'name', name: $localize`Name`, cellClass: 'font-weight-bold', flexGrow: 2 },
+      { prop: 'name', name: $localize`Name`, cellClass: 'fw-bold', flexGrow: 2 },
       {
         prop: 'labels.severity',
         name: $localize`Severity`,
