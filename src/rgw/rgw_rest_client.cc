@@ -695,36 +695,7 @@ int RGWRESTGenerateHTTPHeaders::sign(const DoutPrefixProvider *dpp, RGWAccessKey
   return 0;
 }
 
-<<<<<<< HEAD
 void RGWRESTStreamS3PutObj::send_init(const rgw_obj& obj)
-=======
-void RGWRESTStreamS3PutObj::send_init(const DoutPrefixProvider *dpp, rgw_bucket* bucket)
-{
-  string resource_str;
-  string resource;
-  string new_url = url;
-  string new_host = host;
-
-  const auto& bucket_name = bucket->name;
-
-  resource_str = bucket_name;
-
-  //do not encode slash in object key name
-  url_encode(resource_str, resource, false);
-
-  if (new_url[new_url.size() - 1] != '/')
-    new_url.append("/");
-
-  method = "PUT";
-  headers_gen.init(method, new_host, resource_prefix, new_url, resource, params, api_name);
-
-  url = headers_gen.get_url();
-}
-
-
-
-void RGWRESTStreamS3PutObj::send_init(rgw::sal::Object* obj)
->>>>>>> s3-d3n/wip-s3-filter
 {
   string resource_str;
   string resource;
@@ -753,6 +724,64 @@ void RGWRESTStreamS3PutObj::send_init(rgw::sal::Object* obj)
 
   url = headers_gen.get_url();
 }
+
+
+void RGWRESTStreamS3PutObj::send_init(const DoutPrefixProvider *dpp, rgw_bucket* bucket)
+{
+  string resource_str;
+  string resource;
+  string new_url = url;
+  string new_host = host;
+
+  const auto& bucket_name = bucket->name;
+
+  resource_str = bucket_name;
+
+  //do not encode slash in object key name
+  url_encode(resource_str, resource, false);
+
+  if (new_url[new_url.size() - 1] != '/')
+    new_url.append("/");
+
+  method = "PUT";
+  headers_gen.init(method, new_host, resource_prefix, new_url, resource, params, api_name);
+
+  url = headers_gen.get_url();
+}
+
+void RGWRESTStreamS3PutObj::send_init(rgw::sal::Object* obj)
+{
+  string resource_str;
+  string resource;
+  string new_url = url;
+  string new_host = host;
+
+   const auto& bucket_name = obj->get_bucket()->get_name();
+
+  if (host_style == VirtualStyle) {
+    resource_str = obj->get_oid();
+
+    new_url = bucket_name + "."  + new_url;
+    new_host = bucket_name + "." + new_host;
+  } else {
+    resource_str = bucket_name + "/" + obj->get_oid();
+  }
+
+  //do not encode slash in object key name
+  url_encode(resource_str, resource, false);
+
+  if (new_url[new_url.size() - 1] != '/')
+    new_url.append("/");
+
+  method = "PUT";
+  headers_gen.init(method, new_host, resource_prefix, new_url, resource, params, api_name);
+
+  url = headers_gen.get_url();
+}
+
+
+
+
 
 void RGWRESTStreamS3PutObj::send_ready(const DoutPrefixProvider *dpp, RGWAccessKey& key, map<string, bufferlist>& rgw_attrs)
 {
