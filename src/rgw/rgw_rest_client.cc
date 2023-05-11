@@ -695,7 +695,36 @@ int RGWRESTGenerateHTTPHeaders::sign(const DoutPrefixProvider *dpp, RGWAccessKey
   return 0;
 }
 
+<<<<<<< HEAD
 void RGWRESTStreamS3PutObj::send_init(const rgw_obj& obj)
+=======
+void RGWRESTStreamS3PutObj::send_init(const DoutPrefixProvider *dpp, rgw_bucket* bucket)
+{
+  string resource_str;
+  string resource;
+  string new_url = url;
+  string new_host = host;
+
+  const auto& bucket_name = bucket->name;
+
+  resource_str = bucket_name;
+
+  //do not encode slash in object key name
+  url_encode(resource_str, resource, false);
+
+  if (new_url[new_url.size() - 1] != '/')
+    new_url.append("/");
+
+  method = "PUT";
+  headers_gen.init(method, new_host, resource_prefix, new_url, resource, params, api_name);
+
+  url = headers_gen.get_url();
+}
+
+
+
+void RGWRESTStreamS3PutObj::send_init(rgw::sal::Object* obj)
+>>>>>>> s3-d3n/wip-s3-filter
 {
   string resource_str;
   string resource;
@@ -752,11 +781,25 @@ void RGWRESTStreamS3PutObj::send_ready(const DoutPrefixProvider *dpp, RGWAccessK
   out_cb = new RGWRESTStreamOutCB(this);
 }
 
+void RGWRESTStreamS3PutObj::put_bucket_init(const DoutPrefixProvider *dpp, RGWAccessKey& key, rgw_bucket* bucket, map<string, bufferlist>& attrs)
+{
+  send_init(dpp, bucket);
+  send_ready(dpp, key, attrs);
+}
+
 void RGWRESTStreamS3PutObj::put_obj_init(const DoutPrefixProvider *dpp, RGWAccessKey& key, const rgw_obj& obj, map<string, bufferlist>& attrs)
 {
   send_init(obj);
   send_ready(dpp, key, attrs);
 }
+
+void RGWRESTStreamS3PutObj::put_obj_init(const DoutPrefixProvider *dpp, RGWAccessKey& key, rgw::sal::Object* obj, map<string, bufferlist>& attrs)
+{
+  send_init(obj);
+  send_ready(dpp, key, attrs);
+}
+
+
 
 void set_str_from_headers(map<string, string>& out_headers, const string& header_name, string& str)
 {
@@ -936,7 +979,7 @@ int RGWHTTPStreamRWRequest::complete_request(optional_yield y,
                                              map<string, string> *pattrs,
                                              map<string, string> *pheaders)
 {
-  int ret = wait(y);
+  int ret = wait(null_yield);
   if (ret < 0) {
     return ret;
   }
@@ -1016,6 +1059,7 @@ int RGWHTTPStreamRWRequest::handle_header(const string& name, const string& val)
 int RGWHTTPStreamRWRequest::receive_data(void *ptr, size_t len, bool *pause)
 {
   size_t orig_len = len;
+
 
   if (cb) {
     in_data.append((const char *)ptr, len);

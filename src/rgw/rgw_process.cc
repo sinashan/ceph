@@ -453,6 +453,7 @@ done:
   } else {
     ldpp_dout(s, 2) << "http status=" << s->err.http_ret << dendl;
   }
+
   if (handler)
     handler->put_op(op);
   rest->put_handler(handler);

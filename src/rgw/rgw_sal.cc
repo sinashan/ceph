@@ -32,6 +32,10 @@
 #include "driver/dbstore/config/store.h"
 #endif
 
+#ifdef WITH_RADOSGW_s3_FILTER
+#include "rgw_sal_S3.h"
+#endif
+
 #ifdef WITH_RADOSGW_MOTR
 #include "rgw_sal_motr.h"
 #endif
@@ -57,6 +61,10 @@ extern rgw::sal::Driver* newDaosStore(CephContext *cct);
 #endif
 extern rgw::sal::Driver* newBaseFilter(rgw::sal::Driver* next);
 extern rgw::sal::Driver* newD3NFilter(rgw::sal::Driver* next);
+#ifdef WITH_RADOSGW_S3_FILTER
+extern rgw::sal::Driver* newS3Filter(rgw::sal::Driver* next);
+#endif
+
 }
 
 RGWObjState::RGWObjState() {
@@ -210,6 +218,20 @@ rgw::sal::Driver* DriverManager::init_storage_provider(const DoutPrefixProvider*
       cct->_conf->rgw_d3n_l1_eviction_policy << dendl;
   }
 
+#ifdef WITH_RADOSGW_S3_FILTER
+  else if (cfg.filter_name.compare("s3") == 0) {
+    rgw::sal::Driver* next = driver;
+    driver = newS3Filter(next);
+
+    if (driver->initialize(cct, dpp) < 0) {
+      ldpp_dout(dpp, 0) << "Failed to initialize new S3 Filter" << dendl;
+      delete driver;
+      delete next;
+      return nullptr;
+    }
+  }
+#endif
+
   return driver;
 }
 
@@ -316,7 +338,10 @@ DriverManager::Config DriverManager::get_config(bool admin, CephContext* cct)
   }
 #endif
 
+  //FIXME : AMIN : uncomment below lines
+  cfg.filter_name = "s3";
   // Get the filter
+  /*
   cfg.filter_name = "none";
   const auto& config_filter = g_conf().get_val<std::string>("rgw_filter");
   if (config_filter == "base") {
@@ -335,6 +360,13 @@ DriverManager::Config DriverManager::get_config(bool admin, CephContext* cct)
       }
     }
   }
+#ifdef WITH_RADOSGW_S3_FILTER
+  
+  else if (config_filter == "s3") {
+    cfg.filter_name= "s3";
+  }
+#endif
+*/
 
   return cfg;
 }
