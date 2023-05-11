@@ -217,8 +217,6 @@ rgw::sal::Driver* DriverManager::init_storage_provider(const DoutPrefixProvider*
     lsubdout(cct, rgw, 1) << "rgw_d3n: rgw_d3n_l1_eviction_policy=" <<
       cct->_conf->rgw_d3n_l1_eviction_policy << dendl;
   }
-
-#ifdef WITH_RADOSGW_S3_FILTER
   else if (cfg.filter_name.compare("s3") == 0) {
     rgw::sal::Driver* next = driver;
     driver = newS3Filter(next);
@@ -230,7 +228,6 @@ rgw::sal::Driver* DriverManager::init_storage_provider(const DoutPrefixProvider*
       return nullptr;
     }
   }
-#endif
 
   return driver;
 }
@@ -347,7 +344,7 @@ DriverManager::Config DriverManager::get_config(bool admin, CephContext* cct)
   if (config_filter == "base") {
     cfg.filter_name = "base";
   } else if (config_filter == "d3n") {
-    /* Check to see if d3n is configured, but only for non-admin */
+    // Check to see if d3n is configured, but only for non-admin
     const auto& d3n = g_conf().get_val<bool>("rgw_d3n_l1_local_datacache_enabled");
     if (d3n) {
       if (g_conf().get_val<Option::size_t>("rgw_max_chunk_size") !=
