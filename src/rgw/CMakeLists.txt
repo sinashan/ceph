@@ -116,6 +116,7 @@ set(librgw_common_srcs
   rgw_role.cc
   rgw_sal.cc
   rgw_sal_filter.cc
+  rgw_sal_d4n.cc
   rgw_sal_s3.cc
   rgw_string.cc
   rgw_tag.cc
@@ -149,6 +150,8 @@ set(librgw_common_srcs
   rgw_tracer.cc
   rgw_lua_background.cc
   rgw_sal_d3n.cc
+  driver/d4n/d4n_directory.cc
+  driver/d4n/d4n_datacache.cc
   driver/rados/cls_fifo_legacy.cc
   driver/rados/rgw_bucket.cc
   driver/rados/rgw_bucket_sync.cc

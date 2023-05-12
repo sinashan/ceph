@@ -36,6 +36,10 @@
 #include "rgw_sal_S3.h"
 #endif
 
+#ifdef WITH_RADOSGW_D4N
+#include "rgw_sal_d4n.h" 
+#endif
+
 #ifdef WITH_RADOSGW_MOTR
 #include "rgw_sal_motr.h"
 #endif
@@ -217,6 +221,7 @@ rgw::sal::Driver* DriverManager::init_storage_provider(const DoutPrefixProvider*
     lsubdout(cct, rgw, 1) << "rgw_d3n: rgw_d3n_l1_eviction_policy=" <<
       cct->_conf->rgw_d3n_l1_eviction_policy << dendl;
   }
+#ifdef WITH_RADOSGW_S3_FILTER 
   else if (cfg.filter_name.compare("s3") == 0) {
     rgw::sal::Driver* next = driver;
     driver = newS3Filter(next);
@@ -228,6 +233,21 @@ rgw::sal::Driver* DriverManager::init_storage_provider(const DoutPrefixProvider*
       return nullptr;
     }
   }
+#endif
+
+#ifdef WITH_RADOSGW_D4N 
+  else if (cfg.filter_name.compare("d4n") == 0) {
+    rgw::sal::Driver* next = driver;
+    driver = newD4NFilter(next);
+
+    if (driver->initialize(cct, dpp) < 0) {
+      delete driver;
+      delete next;
+      return nullptr;
+    }
+  }
+#endif
+
 
   return driver;
 }
@@ -336,9 +356,9 @@ DriverManager::Config DriverManager::get_config(bool admin, CephContext* cct)
 #endif
 
   //FIXME : AMIN : uncomment below lines
-  cfg.filter_name = "s3";
+  //cfg.filter_name = "s3";
   // Get the filter
-  /*
+  
   cfg.filter_name = "none";
   const auto& config_filter = g_conf().get_val<std::string>("rgw_filter");
   if (config_filter == "base") {
@@ -357,13 +377,19 @@ DriverManager::Config DriverManager::get_config(bool admin, CephContext* cct)
       }
     }
   }
-#ifdef WITH_RADOSGW_S3_FILTER
-  
+
+#ifdef WITH_RADOSGW_S3_FILTER  
   else if (config_filter == "s3") {
     cfg.filter_name= "s3";
   }
 #endif
-*/
+
+#ifdef WITH_RADOSGW_D4N
+  else if (config_filter == "d4n") {
+    cfg.filter_name= "d4n";
+  }
+#endif
+
 
   return cfg;
 }
