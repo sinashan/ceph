@@ -68,6 +68,9 @@ extern rgw::sal::Driver* newD3NFilter(rgw::sal::Driver* next);
 #ifdef WITH_RADOSGW_S3_FILTER
 extern rgw::sal::Driver* newS3Filter(rgw::sal::Driver* next);
 #endif
+#ifdef WITH_RADOSGW_D4N
+extern rgw::sal::Driver* newD4NFilter(rgw::sal::Driver* next);
+#endif
 
 }
 
@@ -197,9 +200,17 @@ rgw::sal::Driver* DriverManager::init_storage_provider(const DoutPrefixProvider*
       delete next;
       return nullptr;
     }
-  } else if (cfg.filter_name.compare("d3n") == 0) {
+  }
+
+  else{
+  //deploy requested filters 
+  bool d3n_filter = false;
+  bool d4n_filter = false;
+  bool s3_filter = false;
+  if (cfg.filter_name_d3n.compare("d3n") == 0) {
     rgw::sal::Driver* next = driver;
     driver = newD3NFilter(next);
+    
 
     if (driver->initialize(cct, dpp) < 0) {
       ldpp_dout(dpp, 0) << "Failed to initialize newD3NFilter" << dendl;
@@ -207,23 +218,30 @@ rgw::sal::Driver* DriverManager::init_storage_provider(const DoutPrefixProvider*
       delete next;
       return nullptr;
     }
+    
+    d3n_filter = true;
 
-    lsubdout(cct, rgw, 1) << "rgw_d3n: rgw_d3n_l1_local_datacache_enabled=" <<
-      cct->_conf->rgw_d3n_l1_local_datacache_enabled << dendl;
-    lsubdout(cct, rgw, 1) << "rgw_d3n: rgw_d3n_l1_datacache_persistent_path='" <<
-      cct->_conf->rgw_d3n_l1_datacache_persistent_path << "'" << dendl;
-    lsubdout(cct, rgw, 1) << "rgw_d3n: rgw_d3n_l1_datacache_size=" <<
-      cct->_conf->rgw_d3n_l1_datacache_size << dendl;
-    lsubdout(cct, rgw, 1) << "rgw_d3n: rgw_d3n_l1_evict_cache_on_start=" <<
-      cct->_conf->rgw_d3n_l1_evict_cache_on_start << dendl;
-    lsubdout(cct, rgw, 1) << "rgw_d3n: rgw_d3n_l1_fadvise=" <<
-      cct->_conf->rgw_d3n_l1_fadvise << dendl;
     lsubdout(cct, rgw, 1) << "rgw_d3n: rgw_d3n_l1_eviction_policy=" <<
       cct->_conf->rgw_d3n_l1_eviction_policy << dendl;
   }
+
+  #ifdef WITH_RADOSGW_D4N 
+  if (cfg.filter_name_d4n.compare("d4n") == 0) {
+    rgw::sal::Driver* next = driver; //D3N is the next filter
+    driver = newD4NFilter(next);
+
+    if (driver->initialize(cct, dpp) < 0) {
+      delete driver;
+      delete next;
+      return nullptr;
+    }
+    d4n_filter = true;
+  }
+#endif
+
 #ifdef WITH_RADOSGW_S3_FILTER 
-  else if (cfg.filter_name.compare("s3") == 0) {
-    rgw::sal::Driver* next = driver;
+  if (cfg.filter_name_s3.compare("s3") == 0) {
+    rgw::sal::Driver* next = driver; //D4N is the next filter
     driver = newS3Filter(next);
 
     if (driver->initialize(cct, dpp) < 0) {
@@ -232,23 +250,10 @@ rgw::sal::Driver* DriverManager::init_storage_provider(const DoutPrefixProvider*
       delete next;
       return nullptr;
     }
+    s3_filter = true;
   }
 #endif
-
-#ifdef WITH_RADOSGW_D4N 
-  else if (cfg.filter_name.compare("d4n") == 0) {
-    rgw::sal::Driver* next = driver;
-    driver = newD4NFilter(next);
-
-    if (driver->initialize(cct, dpp) < 0) {
-      delete driver;
-      delete next;
-      return nullptr;
-    }
   }
-#endif
-
-
   return driver;
 }
 
@@ -360,10 +365,19 @@ DriverManager::Config DriverManager::get_config(bool admin, CephContext* cct)
   // Get the filter
   
   cfg.filter_name = "none";
+  cfg.filter_name_d3n = "none";
+  cfg.filter_name_d4n = "none";
+  cfg.filter_name_s3 = "none";
+
   const auto& config_filter = g_conf().get_val<std::string>("rgw_filter");
+  const auto& config_filter_d3n = g_conf().get_val<std::string>("rgw_filter_d3n");
+  const auto& config_filter_d4n = g_conf().get_val<std::string>("rgw_filter_d4n");
+  const auto& config_filter_s3 = g_conf().get_val<std::string>("rgw_filter_s3");
+
   if (config_filter == "base") {
     cfg.filter_name = "base";
-  } else if (config_filter == "d3n") {
+  }
+  if (config_filter_d3n == "d3n") {
     // Check to see if d3n is configured, but only for non-admin
     const auto& d3n = g_conf().get_val<bool>("rgw_d3n_l1_local_datacache_enabled");
     if (d3n) {
@@ -373,20 +387,20 @@ DriverManager::Config DriverManager::get_config(bool admin, CephContext* cct)
       } else if (!g_conf().get_val<bool>("rgw_beast_enable_async")) {
 	      lsubdout(cct, rgw_datacache, 0) << "rgw_d3n:  WARNING: D3N DataCache disabling (D3N requires yield context - rgw_beast_enable_async=true)" << dendl;
       } else {
-        cfg.filter_name = "d3n";
+        cfg.filter_name_d3n = "d3n";
       }
     }
   }
 
-#ifdef WITH_RADOSGW_S3_FILTER  
-  else if (config_filter == "s3") {
-    cfg.filter_name= "s3";
+#ifdef WITH_RADOSGW_D4N
+  if (config_filter_d4n == "d4n") {
+    cfg.filter_name_d4n= "d4n";
   }
 #endif
 
-#ifdef WITH_RADOSGW_D4N
-  else if (config_filter == "d4n") {
-    cfg.filter_name= "d4n";
+#ifdef WITH_RADOSGW_S3_FILTER  
+  if (config_filter_s3 == "s3") {
+    cfg.filter_name_s3= "s3";
   }
 #endif
 

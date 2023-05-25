@@ -3598,8 +3598,39 @@ options:
   - none
   - base
   - trace
+- name: rgw_filter_d3n
+  type: str
+  level: advanced
+  desc: experimental Option to set a filter
+  long_desc: defaults to none. Other valid values are base and trace (both experimental).
+  default: none
+  services:
+  - rgw
+  enum_values:
+  - none
   - d3n
+- name: rgw_filter_d4n
+  type: str
+  level: advanced
+  desc: experimental Option to set a filter
+  long_desc: defaults to none. Other valid values are base and trace (both experimental).
+  default: none
+  services:
+  - rgw
+  enum_values:
+  - none
   - d4n
+- name: rgw_filter_s3
+  type: str
+  level: advanced
+  desc: experimental Option to set a filter
+  long_desc: defaults to none. Other valid values are base and trace (both experimental).
+  default: none
+  services:
+  - rgw
+  enum_values:
+  - none
+  - s3
 - name: dbstore_db_dir
   type: str
   level: advanced

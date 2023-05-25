@@ -1577,6 +1577,9 @@ public:
     std::string store_name;
     /** Name of filter to create or "none" */
     std::string filter_name;
+    std::string filter_name_d3n;
+    std::string filter_name_d4n;
+    std::string filter_name_s3;
   };
 
   DriverManager() {}
