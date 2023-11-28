@@ -2749,6 +2749,7 @@ int RGWRados::BucketShard::init(const rgw_bucket& _bucket,
     ldpp_dout(dpp, 0) << "ERROR: open_bucket_index_shard() returned ret=" << ret << dendl;
     return ret;
   }
+  ldpp_dout(dpp, 20) <<  __LINE__ << " AMIN " << dendl;
   ldpp_dout(dpp, 20) << " bucket index object: " << bucket_obj.get_raw_obj() << dendl;
 
   return 0;
@@ -2767,7 +2768,8 @@ int RGWRados::BucketShard::init(const DoutPrefixProvider *dpp, const RGWBucketIn
     ldpp_dout(dpp, 0) << "ERROR: open_bucket_index_shard() returned ret=" << ret << dendl;
     return ret;
   }
-  ldpp_dout(dpp, 20) << " bucket index object: " << bucket_obj << dendl;
+  ldpp_dout(dpp, 20) <<  __LINE__ << " AMIN " << dendl;
+  ldpp_dout(dpp, 20) <<  " bucket index object: " << bucket_obj << dendl;
 
   return 0;
 }
@@ -2786,6 +2788,7 @@ int RGWRados::BucketShard::init(const DoutPrefixProvider *dpp,
     ldpp_dout(dpp, 0) << "ERROR: open_bucket_index_shard() returned ret=" << ret << dendl;
     return ret;
   }
+  ldpp_dout(dpp, 20) <<  __LINE__ << " AMIN " << dendl;
   ldpp_dout(dpp, 20) << " bucket index object: " << bucket_obj << dendl;
 
   return 0;
@@ -6317,8 +6320,10 @@ int RGWRados::Object::prepare_atomic_modification(const DoutPrefixProvider *dpp,
 
   if (ptag) {
     state->write_tag = *ptag;
+    ldpp_dout(dpp, 20) << "AMIN: " << __func__<< ": " << __LINE__ << ": write tag is= " << state->write_tag.c_str() << dendl;
   } else {
     append_rand_alpha(store->ctx(), state->write_tag, state->write_tag, 32);
+    ldpp_dout(dpp, 20) << "AMIN: " << __func__<< ": " << __LINE__ << ": write tag is= " << state->write_tag.c_str() << dendl;
   }
   bufferlist bl;
   bl.append(state->write_tag.c_str(), state->write_tag.size() + 1);
@@ -8218,6 +8223,7 @@ void RGWRados::gen_rand_obj_instance_name(rgw_obj_key *target_key)
   gen_rand_alphanumeric_no_underscore(cct, buf, OBJ_INSTANCE_LEN); /* don't want it to get url escaped,
                                                                       no underscore for instance name due to the way we encode the raw keys */
 
+  ldout(cct, 20) << "AMIN:" << __func__ << ": " << __LINE__ << ": buf is: " << buf << dendl;
   target_key->set_instance(buf);
 }
 

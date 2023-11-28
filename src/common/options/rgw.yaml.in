@@ -3905,6 +3905,37 @@ options:
   flags:
   - startup
   with_legacy: true
+- name: s3_backend_enabled
+  type: bool
+  level: advanced
+  desc: The d4n backend through S3
+  default: false
+  services: 
+  - rgw
+  flags:
+  - startup
+  with_legacy: true
+- name: d4n_writecache_enabled
+  type: bool
+  level: advanced
+  desc: The d4n write cache
+  default: false
+  services: 
+  - rgw
+  flags:
+  - startup
+  with_legacy: true
+- name: s3_backend_url
+  type: str
+  level: advanced
+  desc: The rgw S3 backend address
+  default: 127.0.0.1:8000
+  services: 
+  - rgw
+  flags:
+  - startup
+  with_legacy: true
+
 - name: rgw_topic_persistency_time_to_live
   type: uint
   level: advanced

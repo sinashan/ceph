@@ -16,7 +16,7 @@ namespace efs = std::experimental::filesystem;
 
 namespace rgw { namespace cache {
 
-constexpr std::string ATTR_PREFIX = "user.rgw.";
+constexpr auto ATTR_PREFIX = "user.rgw.";
 
 std::optional<Partition> SSDDriver::get_partition_info(const DoutPrefixProvider* dpp, const std::string& name, const std::string& type)
 {

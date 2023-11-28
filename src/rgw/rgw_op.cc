@@ -4145,12 +4145,15 @@ void RGWPutObj::execute(optional_yield y)
 					 pdest_placement, s->req_id, position,
 					 &cur_accounted_size);
   } else {
+    ldpp_dout(this, 20) << "AMIN:" << __func__ << ": " << __LINE__ << dendl;
     if (s->bucket->versioning_enabled()) {
       if (!version_id.empty()) {
+  	ldpp_dout(this, 20) << "AMIN:" << __func__ << ": " << __LINE__ << ": version id is: " << version_id << dendl;
         s->object->set_instance(version_id);
       } else {
 	s->object->gen_rand_obj_instance_name();
         version_id = s->object->get_instance();
+  	ldpp_dout(this, 20) << "AMIN:" << __func__ << ": " << __LINE__ << ": version id is: " << version_id << dendl;
       }
     }
     processor = driver->get_atomic_writer(this, s->yield, s->object.get(),
