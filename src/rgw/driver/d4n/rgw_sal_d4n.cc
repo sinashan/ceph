@@ -815,9 +815,6 @@ int D4NFilterObject::D4NFilterReadOp::D4NFilterGetCB::handle_data(bufferlist& bl
       std::string oid = this->oid + "_" + std::to_string(ofs);
       std::string oid_in_cache = "D_" + oid + "_" + std::to_string(bl_len);
 
-      ldpp_dout(dpp, 20) << "AMIN: " << __func__ << __LINE__ << " oid is: " << oid << dendl;
-      ldpp_dout(dpp, 20) << "AMIN: " << __func__ << __LINE__ << " oid_in_cache is: " << oid_in_cache << dendl;
-      ldpp_dout(dpp, 20) << "AMIN: " << __func__ << __LINE__ << " this->oid is: " << this->oid << dendl;
       block.size = bl.length();
       block.blockId = ofs;
       uint64_t freeSpace = filter->get_cache_driver()->get_free_space(dpp);
@@ -825,11 +822,9 @@ int D4NFilterObject::D4NFilterReadOp::D4NFilterGetCB::handle_data(bufferlist& bl
         freeSpace += filter->get_policy_driver()->cachePolicy->eviction(dpp, filter->get_cache_driver());
       }
       if (filter->get_cache_driver()->put_async(dpp, oid_in_cache, bl, bl.length(), source->get_attrs()) == 0) {
-      	ldpp_dout(dpp, 20) << "AMIN: " << __func__ << __LINE__ << " put operation succedded for: " << oid_in_cache << dendl;
         filter->get_policy_driver()->cachePolicy->update(dpp, oid, ofs, bl.length(), filter->get_cache_driver());
         /* Store block in directory */
         if (!blockDir->exist_key(oid)) {
-      	  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << __LINE__ << " oid does not exist: " << oid << dendl;
           int ret = blockDir->set_value(&block);
           if (ret < 0) {
             ldpp_dout(dpp, 0) << "D4N Filter: Block directory set operation failed." << dendl;
@@ -842,9 +837,6 @@ int D4NFilterObject::D4NFilterReadOp::D4NFilterGetCB::handle_data(bufferlist& bl
     } else if (bl.length() == rgw_get_obj_max_req_size && bl_rem.length() == 0) { // if bl is the same size as rgw_get_obj_max_req_size, write it to cache
       std::string oid = this->oid + "_" + std::to_string(ofs);
       std::string oid_in_cache = "D_" + oid + "_" + std::to_string(bl_len);
-      ldpp_dout(dpp, 20) << "AMIN: " << __func__ << __LINE__ << " oid is: " << oid << dendl;
-      ldpp_dout(dpp, 20) << "AMIN: " << __func__ << __LINE__ << " oid_in_cache is: " << oid_in_cache << dendl;
-      ldpp_dout(dpp, 20) << "AMIN: " << __func__ << __LINE__ << " this->oid is: " << this->oid << dendl;
       ofs += bl_len;
       block.blockId = ofs;
       block.size = bl.length();
@@ -853,11 +845,9 @@ int D4NFilterObject::D4NFilterReadOp::D4NFilterGetCB::handle_data(bufferlist& bl
         freeSpace += filter->get_policy_driver()->cachePolicy->eviction(dpp, filter->get_cache_driver());
       }
       if (filter->get_cache_driver()->put_async(dpp, oid_in_cache, bl, bl.length(), source->get_attrs()) == 0) {
-      	ldpp_dout(dpp, 20) << "AMIN: " << __func__ << __LINE__ << " put operation succedded for: " << oid_in_cache << dendl;
         filter->get_policy_driver()->cachePolicy->update(dpp, oid, ofs, bl.length(), filter->get_cache_driver());
         /* Store block in directory */
         if (!blockDir->exist_key(oid)) {
-      	  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << __LINE__ << " oid does not exist: " << oid << dendl;
           int ret = blockDir->set_value(&block);
           if (ret < 0) {
             ldpp_dout(dpp, 0) << "D4N Filter: Block directory set operation failed." << dendl;
@@ -878,9 +868,6 @@ int D4NFilterObject::D4NFilterReadOp::D4NFilterGetCB::handle_data(bufferlist& bl
       if (bl_rem.length() == rgw_get_obj_max_req_size) {
         std::string oid = this->oid + "_" + std::to_string(ofs);
         std::string oid_in_cache = "D_" + oid + "_" + std::to_string(bl_rem.length());
-        ldpp_dout(dpp, 20) << "AMIN: " << __func__ << __LINE__ << " oid is: " << oid << dendl;
-        ldpp_dout(dpp, 20) << "AMIN: " << __func__ << __LINE__ << " oid_in_cache is: " << oid_in_cache << dendl;
-        ldpp_dout(dpp, 20) << "AMIN: " << __func__ << __LINE__ << " this->oid is: " << this->oid << dendl;
         ofs += bl_rem.length();
         block.blockId = ofs;
         block.size = bl_rem.length();
@@ -889,11 +876,9 @@ int D4NFilterObject::D4NFilterReadOp::D4NFilterGetCB::handle_data(bufferlist& bl
           freeSpace += filter->get_policy_driver()->cachePolicy->eviction(dpp, filter->get_cache_driver());
         }
         if (filter->get_cache_driver()->put_async(dpp, oid, bl_rem, bl_rem.length(), source->get_attrs()) == 0) {
-      	  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << __LINE__ << " put operation succedded for: " << oid << dendl;
           filter->get_policy_driver()->cachePolicy->update(dpp, oid, ofs, bl_rem.length(), filter->get_cache_driver());
           /* Store block in directory */
           if (!blockDir->exist_key(oid)) {
-      	    ldpp_dout(dpp, 20) << "AMIN: " << __func__ << __LINE__ << " oid does not exist: " << oid << dendl;
             int ret = blockDir->set_value(&block);
             if (ret < 0) {
               ldpp_dout(dpp, 0) << "D4N Filter: Block directory set operation failed." << dendl;
@@ -946,14 +931,13 @@ int D4NFilterObject::D4NFilterDeleteOp::delete_obj(const DoutPrefixProvider* dpp
   return next->delete_obj(dpp, y);
 }
 
-/*
+/* FIXME: for versioning, we need to have uniqu object names in the write cache
 void D4NFilterWriter::gen_rand_obj_instance_name(Object *obj)
 {
 #define OBJ_INSTANCE_LEN 32
   char buf[OBJ_INSTANCE_LEN + 1];
 
   gen_rand_alphanumeric_no_underscore(filter->ctx(), buf, OBJ_INSTANCE_LEN);
-  ldout(cct, 20) << "AMIN:" << __func__ << ": " << __LINE__ << ": buf is: " << buf << dendl;
   obj->get_key()->set_instance(buf);
 }
 */
@@ -992,7 +976,6 @@ void D4NFilterWriter::getAccessSecretKeys(RGWAccessKey* accesskey, User* user)
 
 int D4NFilterWriter::S3BackendPrepare(optional_yield y) 
 {
-  ldpp_dout(this->save_dpp, 20) << "AMIN " << __func__ << " : owner is : " << obj->get_bucket()->get_owner() << dendl;
   this->user = (rgw::sal::D4NFilterUser*) obj->get_bucket()->get_owner();
 
   std::string url ="https://" + g_conf()->s3_backend_url;
@@ -1017,7 +1000,6 @@ int D4NFilterWriter::process(bufferlist&& data, uint64_t offset)
     off_t ofs = offset;
 
     rgw::d4n::BlockDirectory* blockDir = filter->get_block_dir();
-    //const std::lock_guard l(d4n_put_data_lock); AMIN
     rgw::d4n::CacheBlock block;
 
     block.hostsList.push_back(blockDir->get_addr().host + ":" + std::to_string(blockDir->get_addr().port));
@@ -1028,7 +1010,7 @@ int D4NFilterWriter::process(bufferlist&& data, uint64_t offset)
     block.cacheObj.dirty = true;
 
     if (bl.length() > 0) { // if bl = bl_rem has data and this is the last part, write it to cache
-      /* FIXME: AMIN: to add unique ID we have to generate a random number.
+      /* FIXME:  to add unique ID we have to generate a random number.
        * but we need to make sure it doesn't conflict with backend uniqueID.
        *
       std::string uniqueID = gen_rand_obj_instance_name(obj);
@@ -1036,18 +1018,18 @@ int D4NFilterWriter::process(bufferlist&& data, uint64_t offset)
       */
       std::string oid = obj->get_bucket()->get_name() + "_" + obj->get_key().get_oid() + "_" + std::to_string(ofs);
       std::string oid_in_cache = "D_" + oid + "_" + std::to_string(bl_len);
-      ldpp_dout(this->save_dpp, 20) << " AMIN: " << __func__ << " : " << __LINE__ << " oid is: " << oid << dendl;
       block.size = bl.length();
       block.blockId = ofs;
       block.dirty = 1;
       uint64_t freeSpace = filter->get_cache_driver()->get_free_space(save_dpp);
-      /* TODO: implement this part - AMIN
+      /* TODO: for eviction implement this part
       while(freeSpace < block.size) {
         freeSpace += filter->get_policy_driver()->cachePolicy->eviction(dpp, filter->get_cache_driver());
       }
       */
      if (filter->get_cache_driver()->put_async(save_dpp, oid_in_cache, bl, bl.length(), obj->get_attrs()) == 0) {
-        //filter->get_policy_driver()->cachePolicy->update(save_dpp, oid, ofs, bl.length(), filter->get_cache_driver()); AMIN
+	// FIXME: uncomment this
+        //filter->get_policy_driver()->cachePolicy->update(save_dpp, oid, ofs, bl.length(), filter->get_cache_driver());
         // Store block in directory
         if (!blockDir->exist_key(oid)) {
           int ret = blockDir->set_value(&block);
@@ -1073,7 +1055,6 @@ int D4NFilterWriter::S3BackendProcess(bufferlist&& data, uint64_t offset)
   int ret = 0; 
   bufferlist objectData = data;
   
-  ldpp_dout(this->save_dpp, 20) << " AMIN: " << __func__ << " : " << __LINE__ << dendl;
 
   if (objectData.length() != 0){
     send_data.claim_append(objectData);
@@ -1104,8 +1085,8 @@ int D4NFilterWriter::complete(size_t accounted_size, const std::string& etag,
 {
   ldpp_dout(save_dpp, 20) << "D4N Filter: " << __func__ << " : " << __LINE__ << dendl;
 
-  /* FIXME: AMIN: update OBJECT directory here
-   * we update BLOCK directory in the process function.
+  /* FIXME: update OBJECT directory here
+   * we update BLOCK directory in the write process function.
    *
   rgw::d4n::BlockDirectory* tempBlockDir = filter->get_block_dir();
 
@@ -1213,7 +1194,6 @@ int D4NFilterWriter::complete(size_t accounted_size, const std::string& etag,
 
 int D4NFilterWriter::S3BackendComplete(size_t accounted_size)
 {
-  ldpp_dout(this->save_dpp, 20) << " AMIN: " << __func__ << " : " << __LINE__ << dendl;
   int ret = 0;
   this->obj_wr->set_send_length(accounted_size);
   ret = this->obj_wr->complete_request(null_yield);
