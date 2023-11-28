@@ -249,6 +249,7 @@ int BlockDirectory::set_value(CacheBlock* block) {
   /* Creating a list of the entry's properties */
   list.push_back(make_pair("key", key));
   list.push_back(make_pair("size", std::to_string(block->size)));
+  list.push_back(make_pair("dirty", std::to_string(block->dirty)));
   list.push_back(make_pair("globalWeight", std::to_string(block->globalWeight)));
   list.push_back(make_pair("bucketName", block->cacheObj.bucketName));
   list.push_back(make_pair("objName", block->cacheObj.objName));
@@ -284,6 +285,7 @@ int BlockDirectory::get_value(CacheBlock* block) {
   if (exist_key(key)) {
     std::string hosts;
     std::string size;
+    std::string dirty;
     std::string bucketName;
     std::string objName;
     std::vector<std::string> fields;
@@ -291,11 +293,12 @@ int BlockDirectory::get_value(CacheBlock* block) {
     fields.push_back("key");
     fields.push_back("hosts");
     fields.push_back("size");
+    fields.push_back("dirty");
     fields.push_back("bucketName");
     fields.push_back("objName");
 
     try {
-      client.hmget(key, fields, [&key, &hosts, &size, &bucketName, &objName, &keyExist](cpp_redis::reply &reply) {
+      client.hmget(key, fields, [&key, &hosts, &size, &dirty, &bucketName, &objName, &keyExist](cpp_redis::reply &reply) {
         if (reply.is_array()) {
 	  auto arr = reply.as_array();
 
@@ -304,6 +307,7 @@ int BlockDirectory::get_value(CacheBlock* block) {
 	    key = arr[0].as_string();
 	    hosts = arr[1].as_string();
 	    size = arr[2].as_string();
+	    dirty = arr[2].as_string();
 	    bucketName = arr[3].as_string();
 	    objName = arr[4].as_string();
 	  }
@@ -318,6 +322,7 @@ int BlockDirectory::get_value(CacheBlock* block) {
 
       /* Currently, there can only be one host */ // update -Sam
       block->size = std::stoi(size);
+      block->dirty = std::stoi(dirty);
       block->cacheObj.bucketName = bucketName;
       block->cacheObj.objName = objName;
     } catch(std::exception &e) {
@@ -388,6 +393,8 @@ int BlockDirectory::update_field(CacheBlock* block, std::string field, std::stri
     /* Update cache block */ // Remove ones that aren't used -Sam
     if (field == "size")
       block->size = std::stoi(value);
+    else if (field == "dirty")
+      block->dirty = std::stoi(value);
     else if (field == "bucketName")
       block->cacheObj.bucketName = value;
     else if (field == "objName")
@@ -416,6 +423,53 @@ int BlockDirectory::update_field(CacheBlock* block, std::string field, std::stri
   }
 
   return 0;
+}
+
+
+std::string BlockDirectory::get_field(std::string key, std::string field){
+  std::string value;
+
+  if (!client.is_connected()) {
+    find_client(&client);
+  }
+  
+  if (exist_key(key)) {
+    if (field == "hostsList") {
+      /* Append rather than overwrite */
+      std::string hosts;
+
+      try {
+        client.hget(key, "hostsList", [&hosts](cpp_redis::reply& reply) {
+          if (!reply.is_null()) {
+            hosts = reply.as_string();
+          }
+        });
+
+        client.sync_commit(std::chrono::milliseconds(1000));
+      } catch(std::exception &e) {
+        return "";
+      }
+      
+      value += "_";
+      value += hosts;
+    }
+    else{
+     try {
+        client.hget(key, field, [&value](cpp_redis::reply& reply) {
+          if (!reply.is_null()) {
+            value = reply.as_string();
+          }
+        });
+
+        client.sync_commit(std::chrono::milliseconds(1000));
+      } catch(std::exception &e) {
+        return "";
+      }
+    }
+    return value;
+  }
+  else
+    return "";
 }
 
 } } // namespace rgw::d4n

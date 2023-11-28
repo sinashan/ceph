@@ -21,6 +21,7 @@
 #include "rgw_role.h"
 #include "common/dout.h" 
 #include "rgw_aio_throttle.h"
+#include "rgw_rest_client.h"
 
 #include "driver/d4n/d4n_directory.h"
 #include "driver/d4n/d4n_policy.h"
@@ -39,6 +40,7 @@ class D4NFilterDriver : public FilterDriver {
     rgw::d4n::PolicyDriver* lruPolicyDriver;
 
   public:
+    CephContext *cct;
     D4NFilterDriver(Driver* _next);
 
     virtual ~D4NFilterDriver();
@@ -140,7 +142,7 @@ class D4NFilterObject : public FilterObject {
 	D4NFilterReadOp(std::unique_ptr<ReadOp> _next, D4NFilterObject* _source) : FilterReadOp(std::move(_next)),
 										   source(_source) 
         {
-	  std::string oid = source->get_bucket()->get_marker() + "_" + source->get_key().get_oid();
+	  std::string oid = source->get_bucket()->get_name() + "_" + source->get_key().get_oid();
           cb = std::make_unique<D4NFilterGetCB>(source->driver, oid, source); 
 	}
 	virtual ~D4NFilterReadOp() = default;
@@ -210,18 +212,23 @@ class D4NFilterObject : public FilterObject {
 
 class D4NFilterWriter : public FilterWriter {
   private:
-    D4NFilterDriver* driver; 
+    D4NFilterDriver* filter; 
     const DoutPrefixProvider* save_dpp;
+    D4NFilterUser *user; 
     bool atomic;
+    RGWRESTStreamS3PutObj *obj_wr; 
+    bufferlist send_data;
+    bool s3_backend;
+    bool d4n_writecache;
 
   public:
-    D4NFilterWriter(std::unique_ptr<Writer> _next, D4NFilterDriver* _driver, Object* _obj, 
+    D4NFilterWriter(std::unique_ptr<Writer> _next, D4NFilterDriver* _filter, Object* _obj, 
 	const DoutPrefixProvider* _dpp) : FilterWriter(std::move(_next), _obj),
-					  driver(_driver),
+					  filter(_filter),
 					  save_dpp(_dpp), atomic(false) {}
-    D4NFilterWriter(std::unique_ptr<Writer> _next, D4NFilterDriver* _driver, Object* _obj, 
+    D4NFilterWriter(std::unique_ptr<Writer> _next, D4NFilterDriver* _filter, Object* _obj, 
 	const DoutPrefixProvider* _dpp, bool _atomic) : FilterWriter(std::move(_next), _obj),
-							driver(_driver),
+							filter(_filter),
 							save_dpp(_dpp), atomic(_atomic) {}
     virtual ~D4NFilterWriter() = default;
 
@@ -235,8 +242,15 @@ class D4NFilterWriter : public FilterWriter {
                        const std::string *user_data,
                        rgw_zone_set *zones_trace, bool *canceled,
                        const req_context& rctx) override;
-   bool is_atomic() { return atomic; };
-   const DoutPrefixProvider* dpp() { return save_dpp; } 
+
+    int S3BackendPrepare(optional_yield y);
+    int S3BackendProcess(bufferlist&& data, uint64_t offset);
+    int S3BackendComplete(size_t accounted_size);
+    void getAccessSecretKeys(RGWAccessKey* accesskey, User* user);
+    //void gen_rand_obj_instance_name(Object *obj);
+
+    bool is_atomic() { return atomic; };
+    const DoutPrefixProvider* dpp() { return save_dpp; } 
 };
 
 } } // namespace rgw::sal

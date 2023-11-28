@@ -26,6 +26,7 @@ struct CacheBlock {
   CacheObj cacheObj;
   uint64_t blockId; /* block ID */
   uint64_t size; /* Block size in bytes */
+  int dirty = 0;
   int globalWeight = 0;
   std::vector<std::string> hostsList; /* List of hostnames <ip:port> of block locations */
 };
@@ -89,6 +90,7 @@ class BlockDirectory: public Directory {
     int del_value(CacheBlock* block);
 
     int update_field(CacheBlock* block, std::string field, std::string value);
+    std::string get_field(std::string key, std::string field);
 
   private:
     cpp_redis::client client;
