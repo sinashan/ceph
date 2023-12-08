@@ -6,12 +6,12 @@
 
 namespace rgw { namespace d4n {
 
-int CachePolicy::find_client(const DoutPrefixProvider* dpp, cpp_redis::client* client) {
+int CachePolicy::find_client(cpp_redis::client* client) {
   if (client->is_connected())
     return 0;
 
   if (get_addr().host == "" || get_addr().port == 0) {
-    ldpp_dout(dpp, 10) << "RGW D4N Policy: D4N policy endpoint was not configured correctly" << dendl;
+    dout(10) << "RGW D4N Policy: D4N policy endpoint was not configured correctly" << dendl;
     return EDESTADDRREQ;
   }
 
@@ -28,9 +28,10 @@ int CachePolicy::exist_key(std::string key) {
   std::vector<std::string> keys;
   keys.push_back(key);
 
-  if (!client.is_connected()) {
-    return result;
+  if (!client.is_connected()) { 
+    find_client(&client);
   }
+  dout(20) << "AMIN: LFUDAPolicy::" << __func__ << " : " << __LINE__ << dendl;
 
   try {
     client.exists(keys, [&result](cpp_redis::reply &reply) {
@@ -48,6 +49,10 @@ int CachePolicy::exist_key(std::string key) {
 int LFUDAPolicy::set_age(int age) {
   int result = 0;
 
+  if (!client.is_connected()) { 
+    find_client(&client);
+  }
+  dout(20) << "AMIN: LFUDAPolicy::" << __func__ << " : " << __LINE__ << dendl;
   try {
     client.hset("lfuda", "age", std::to_string(age), [&result](cpp_redis::reply& reply) {
       if (!reply.is_null()) {
@@ -67,6 +72,10 @@ int LFUDAPolicy::get_age() {
   int ret = 0;
   int age = -1;
 
+  if (!client.is_connected()) { 
+    find_client(&client);
+  }
+  dout(20) << "AMIN: LFUDAPolicy::" << __func__ << " : " << __LINE__ << dendl;
   try {
     client.hexists("lfuda", "age", [&ret](cpp_redis::reply& reply) {
       if (!reply.is_null()) {
@@ -106,6 +115,11 @@ int LFUDAPolicy::get_age() {
 
 int LFUDAPolicy::set_local_weight_sum(size_t weight, optional_yield y) {
   int result = 0;
+  dout(20) << "AMIN: LFUDAPolicy::" << __func__ << " : " << __LINE__ << dendl;
+  if (!client.is_connected()) { 
+    find_client(&client);
+  }
+  dout(20) << "AMIN: LFUDAPolicy::" << __func__ << " : " << __LINE__ << dendl;
 
   try {
     client.hset("lfuda", "localWeights", std::to_string(weight), [&result](cpp_redis::reply& reply) {
@@ -114,10 +128,13 @@ int LFUDAPolicy::set_local_weight_sum(size_t weight, optional_yield y) {
       }
     }); 
 
+  dout(20) << "AMIN: LFUDAPolicy::" << __func__ << " : " << __LINE__ << dendl;
     client.sync_commit();
   } catch(std::exception &e) {
+  dout(20) << "AMIN: LFUDAPolicy::" << __func__ << " : " << __LINE__ << dendl;
     return -1;
   }
+  dout(20) << "AMIN: LFUDAPolicy::" << __func__ << " : " << __LINE__ << dendl;
 
   return result;
 }
@@ -141,6 +158,10 @@ int LFUDAPolicy::get_local_weight_sum(optional_yield y) {
 
   int weight = -1;
 
+  if (!client.is_connected()) { 
+    find_client(&client);
+  }
+  dout(20) << "AMIN: LFUDAPolicy::" << __func__ << " : " << __LINE__ << dendl;
   try {
     client.hget("lfuda", "localWeights", [&weight](cpp_redis::reply& reply) {
       if (!reply.is_null()) {
@@ -161,6 +182,10 @@ int LFUDAPolicy::get_local_weight_sum(optional_yield y) {
 int LFUDAPolicy::set_global_weight(std::string key, int weight) {
   int result = 0;
 
+  if (!client.is_connected()) { 
+    find_client(&client);
+  }
+  dout(20) << "AMIN: LFUDAPolicy::" << __func__ << " : " << __LINE__ << dendl;
   try {
     client.hset(key, "globalWeight", std::to_string(weight), [&result](cpp_redis::reply& reply) {
       if (!reply.is_null()) {
@@ -179,6 +204,10 @@ int LFUDAPolicy::set_global_weight(std::string key, int weight) {
 int LFUDAPolicy::get_global_weight(std::string key) {
   int weight = -1;
 
+  if (!client.is_connected()) { 
+    find_client(&client);
+  }
+  dout(20) << "AMIN: LFUDAPolicy::" << __func__ << " : " << __LINE__ << dendl;
   try {
     client.hget(key, "globalWeight", [&weight](cpp_redis::reply& reply) {
       if (!reply.is_null()) {
@@ -197,6 +226,10 @@ int LFUDAPolicy::get_global_weight(std::string key) {
 int LFUDAPolicy::set_min_avg_weight(size_t weight, std::string cacheLocation) {
   int result = 0;
 
+  if (!client.is_connected()) { 
+    find_client(&client);
+  }
+  dout(20) << "AMIN: LFUDAPolicy::" << __func__ << " : " << __LINE__ << dendl;
   try {
     client.hset("lfuda", "minAvgWeight:cache", cacheLocation, [&result](cpp_redis::reply& reply) {
       if (!reply.is_null()) {
@@ -231,6 +264,10 @@ int LFUDAPolicy::get_min_avg_weight() {
   int ret = 0;
   int weight = -1;
 
+  if (!client.is_connected()) { 
+    find_client(&client);
+  }
+  dout(20) << "AMIN: LFUDAPolicy::" << __func__ << " : " << __LINE__ << dendl;
   try {
     client.hexists("lfuda", "minAvgWeight:cache", [&ret](cpp_redis::reply& reply) {
       if (!reply.is_null()) {
@@ -401,10 +438,13 @@ void LFUDAPolicy::update(const DoutPrefixProvider* dpp, std::string& key, uint64
   if (cacheDriver->set_attr(dpp, key, "user.rgw.localWeight", std::to_string(localWeight), y) < 0) 
     ldpp_dout(dpp, 10) << "LFUDAPolicy::" << __func__ << "(): CacheDriver set_attr method failed." << dendl;
 
+  ldpp_dout(dpp, 20) << "AMIN: LFUDAPolicy::" << __func__ << "(): set_attr is passed!" << dendl;
   auto localWeights = get_local_weight_sum(y);
+  ldpp_dout(dpp, 20) << "AMIN: LFUDAPolicy::" << __func__ << " : " << __LINE__ << dendl;
   localWeights += localWeight;
   if (set_local_weight_sum(localWeights, y) < 0)
     ldpp_dout(dpp, 10) << "LFUDAPolicy::" << __func__ << "(): Failed to update sum of local weights for the cache backend." << dendl;
+  ldpp_dout(dpp, 20) << "AMIN: LFUDAPolicy::" << __func__ << "(): Done!" << dendl;
 }
 
 bool LFUDAPolicy::erase(const DoutPrefixProvider* dpp, const std::string& key, optional_yield y)

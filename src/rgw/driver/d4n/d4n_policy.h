@@ -48,7 +48,7 @@ class CachePolicy {
 
     virtual int init(CephContext *_cct, const DoutPrefixProvider* dpp) {return 0;}
 
-    virtual int find_client(const DoutPrefixProvider* dpp, cpp_redis::client* client) = 0;
+    int find_client(cpp_redis::client* client);
     virtual int exist_key(std::string key) = 0;
     //virtual int get_block(const DoutPrefixProvider* dpp, CacheBlock* block, rgw::cache::CacheDriver* cacheNode) = 0;
     virtual int eviction(const DoutPrefixProvider* dpp, uint64_t size, optional_yield y) = 0;
@@ -129,7 +129,7 @@ class LFUDAPolicy : public CachePolicy {
       return it->second;
     }
 
-    virtual int find_client(const DoutPrefixProvider* dpp, cpp_redis::client* client) override { return CachePolicy::find_client(dpp, client); }
+    //virtual int find_client(const DoutPrefixProvider* dpp, cpp_redis::client* client) override { return CachePolicy::find_client(dpp, client); }
     virtual int exist_key(std::string key) override { return CachePolicy::exist_key(key); }
     //virtual int get_block(const DoutPrefixProvider* dpp, CacheBlock* block, rgw::cache::CacheDriver* cacheNode) override;
     virtual int eviction(const DoutPrefixProvider* dpp, uint64_t size, optional_yield y) override;
@@ -175,7 +175,7 @@ class LRUPolicy : public CachePolicy {
     List entries_lru_list;
     std::unordered_map<std::string, Entry*> entries_map;
   public:
-    virtual int find_client(const DoutPrefixProvider* dpp, cpp_redis::client* client) override { return 0; };
+    //virtual int find_client(const DoutPrefixProvider* dpp, cpp_redis::client* client) override { return 0; };
     virtual int exist_key(std::string key) override;
     //virtual int get_block(const DoutPrefixProvider* dpp, CacheBlock* block, rgw::cache::CacheDriver* cacheNode) override;
     virtual int eviction(const DoutPrefixProvider* dpp, uint64_t size, optional_yield y) override;

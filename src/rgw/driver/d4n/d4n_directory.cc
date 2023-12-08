@@ -231,8 +231,10 @@ int BlockDirectory::exist_key(std::string key) {
 
 int BlockDirectory::set_value(CacheBlock* block) {
   /* Creating the index based on objName */
+  dout(20) << "AMIN: Block Directiry: " << __func__ << dendl;
   std::string result;
   std::string key = build_index(block);
+  dout(20) << "AMIN: Block Directiry: " << __func__ << ": key is: " << key << dendl;
   if (!client.is_connected()) { 
     find_client(&client);
   }
@@ -246,6 +248,7 @@ int BlockDirectory::set_value(CacheBlock* block) {
   std::string endpoint = addr.host + ":" + std::to_string(addr.port);
   std::vector< std::pair<std::string, std::string> > list;
     
+  dout(20) << "AMIN: Block Directiry: " << __func__ << ": endpoint is: " << endpoint << dendl;
   /* Creating a list of the entry's properties */
   list.push_back(make_pair("key", key));
   list.push_back(make_pair("size", std::to_string(block->size)));
@@ -266,12 +269,14 @@ int BlockDirectory::set_value(CacheBlock* block) {
     client.sync_commit(std::chrono::milliseconds(1000));
 
     if (result != "OK") {
+      dout(20) << "AMIN: Block Directiry: " << __func__ << ": hmset faild!" << dendl;
       return -1;
     }
   } catch(std::exception &e) {
     return -1;
   }
 
+  dout(20) << "AMIN: Block Directiry: " << __func__ << ": hmset successed, returning! " << dendl;
   return 0;
 }
 

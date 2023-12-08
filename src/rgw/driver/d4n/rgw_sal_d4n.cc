@@ -1022,9 +1022,11 @@ int D4NFilterWriter::process(bufferlist&& data, uint64_t offset)
       }
      if (filter->get_cache_driver()->put_async(save_dpp, oid_in_cache, bl, bl.length(), obj->get_attrs()) == 0) {
 	// FIXME: uncomment this
-        filter->get_policy_driver()->get_cache_policy()->update(save_dpp, oid, ofs, bl.length(), version, dirty, lastAccessTime, y);
+        filter->get_policy_driver()->get_cache_policy()->update(save_dpp, oid_in_cache, ofs, bl.length(), version, dirty, lastAccessTime, y);
+        ldpp_dout(save_dpp, 20) << "AMIN: D4N Filter: " << __func__ << ": update succeeded!" << dendl;
         // Store block in directory
         if (!blockDir->exist_key(oid)) {
+          ldpp_dout(save_dpp, 20) << "AMIN: D4N Filter: " << __func__ << ": key does not exist in directory, calling set_value" << dendl;
           int ret = blockDir->set_value(&block);
           if (ret < 0) {
             ldpp_dout(save_dpp, 0) << "D4N Filter: " << __func__ << ": Block directory set operation failed." << dendl;
@@ -1040,6 +1042,7 @@ int D4NFilterWriter::process(bufferlist&& data, uint64_t offset)
       return S3BackendProcess(std::move(data), offset);
     }
   } //end d4n_writecache
+  ldpp_dout(save_dpp, 20) << "AMIN: D4N Filter: " << __func__ << ": calling next" << dendl;
   return next->process(std::move(data), offset);
 }
 
