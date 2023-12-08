@@ -3905,6 +3905,16 @@ options:
   flags:
   - startup
   with_legacy: true
+- name: rgw_d4n_cache_cleaning_interval
+  type: int
+  level: advanced
+  desc: The rgw directory port
+  default: 5
+  services: 
+  - rgw
+  flags:
+  - startup
+  with_legacy: true
 - name: s3_backend_enabled
   type: bool
   level: advanced

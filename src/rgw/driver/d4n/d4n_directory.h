@@ -6,6 +6,7 @@
 #include <string>
 #include <iostream>
 #include <boost/lexical_cast.hpp>
+//#include <boost/redis/connection.hpp>
 
 namespace rgw { namespace d4n {
 
@@ -17,16 +18,18 @@ struct Address {
 struct CacheObj {
   std::string objName; /* S3 object name */
   std::string bucketName; /* S3 bucket name */
-  time_t creationTime; /* Creation time of the S3 Object */
-  bool dirty;
+  time_t lastAccessTime; /* Creation time of the S3 Object */
+  int dirty;
   std::vector<std::string> hostsList; /* List of hostnames <ip:port> of object locations for multiple backends */
 };
 
 struct CacheBlock {
   CacheObj cacheObj;
   uint64_t blockId; /* block ID */
+  std::string version;
   uint64_t size; /* Block size in bytes */
-  int dirty = 0;
+  int dirty;
+  time_t lastAccessTime;
   int globalWeight = 0;
   std::vector<std::string> hostsList; /* List of hostnames <ip:port> of block locations */
 };
@@ -45,6 +48,10 @@ class ObjectDirectory: public Directory { // weave into write workflow -Sam
       addr.port = port;
     }
 
+    ~ObjectDirectory() {
+      shutdown();
+    }
+
     void init(CephContext* _cct) {
       cct = _cct;
       addr.host = cct->_conf->rgw_d4n_host;
@@ -53,6 +60,8 @@ class ObjectDirectory: public Directory { // weave into write workflow -Sam
 
     int find_client(cpp_redis::client* client);
     int exist_key(std::string key);
+    void shutdown(){};
+
     Address get_addr() { return addr; }
 
     int set_value(CacheObj* object);
@@ -73,7 +82,11 @@ class BlockDirectory: public Directory {
       addr.host = host;
       addr.port = port;
     }
-    
+
+    ~BlockDirectory() {
+      shutdown();
+    }
+
     void init(CephContext* _cct) {
       cct = _cct;
       addr.host = cct->_conf->rgw_d4n_host;
@@ -82,6 +95,7 @@ class BlockDirectory: public Directory {
 	
     int find_client(cpp_redis::client* client);
     int exist_key(std::string key);
+    void shutdown(){};
     Address get_addr() { return addr; }
 
     int set_value(CacheBlock* block);

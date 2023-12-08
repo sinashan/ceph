@@ -70,7 +70,7 @@ int ObjectDirectory::set_value(CacheObj* object) {
   list.push_back(make_pair("key", key));
   list.push_back(make_pair("objName", object->objName));
   list.push_back(make_pair("bucketName", object->bucketName));
-  list.push_back(make_pair("creationTime", std::to_string(object->creationTime)));
+  list.push_back(make_pair("lastAccessTime", std::to_string(object->lastAccessTime)));
   list.push_back(make_pair("dirty", std::to_string(object->dirty)));
   list.push_back(make_pair("hosts", endpoint)); 
 
@@ -105,7 +105,7 @@ int ObjectDirectory::get_value(CacheObj* object) {
     std::string key;
     std::string objName;
     std::string bucketName;
-    std::string creationTime;
+    std::string lastAccessTime;
     std::string dirty;
     std::string hosts;
     std::vector<std::string> fields;
@@ -113,12 +113,12 @@ int ObjectDirectory::get_value(CacheObj* object) {
     fields.push_back("key");
     fields.push_back("objName");
     fields.push_back("bucketName");
-    fields.push_back("creationTime");
+    fields.push_back("lastAccessTime");
     fields.push_back("dirty");
     fields.push_back("hosts");
 
     try {
-      client.hmget(key, fields, [&key, &objName, &bucketName, &creationTime, &dirty, &hosts, &keyExist](cpp_redis::reply &reply) {
+      client.hmget(key, fields, [&key, &objName, &bucketName, &lastAccessTime, &dirty, &hosts, &keyExist](cpp_redis::reply &reply) {
         if (reply.is_array()) {
 	  auto arr = reply.as_array();
 
@@ -127,7 +127,7 @@ int ObjectDirectory::get_value(CacheObj* object) {
 	    key = arr[0].as_string();
 	    objName = arr[1].as_string();
 	    bucketName = arr[2].as_string();
-	    creationTime = arr[3].as_string();
+	    lastAccessTime = arr[3].as_string();
 	    dirty = arr[4].as_string();
 	    hosts = arr[5].as_string();
 	  }
@@ -145,11 +145,11 @@ int ObjectDirectory::get_value(CacheObj* object) {
       object->bucketName = bucketName;
 
       struct std::tm tm;
-      std::istringstream(creationTime) >> std::get_time(&tm, "%T");
-      strptime(creationTime.c_str(), "%T", &tm); // Need to check formatting -Sam
-      object->creationTime = mktime(&tm);
+      std::istringstream(lastAccessTime) >> std::get_time(&tm, "%T");
+      strptime(lastAccessTime.c_str(), "%T", &tm); // Need to check formatting -Sam
+      object->lastAccessTime = mktime(&tm);
 
-      std::istringstream(dirty) >> object->dirty;
+      object->dirty = std::stoi(dirty);
     } catch(std::exception &e) {
       keyExist = -1;
     }
@@ -250,6 +250,7 @@ int BlockDirectory::set_value(CacheBlock* block) {
   list.push_back(make_pair("key", key));
   list.push_back(make_pair("size", std::to_string(block->size)));
   list.push_back(make_pair("dirty", std::to_string(block->dirty)));
+  list.push_back(make_pair("lastAccessTime", std::to_string(block->lastAccessTime)));
   list.push_back(make_pair("globalWeight", std::to_string(block->globalWeight)));
   list.push_back(make_pair("bucketName", block->cacheObj.bucketName));
   list.push_back(make_pair("objName", block->cacheObj.objName));
@@ -286,6 +287,7 @@ int BlockDirectory::get_value(CacheBlock* block) {
     std::string hosts;
     std::string size;
     std::string dirty;
+    std::string lastAccessTime;
     std::string bucketName;
     std::string objName;
     std::vector<std::string> fields;
@@ -294,11 +296,12 @@ int BlockDirectory::get_value(CacheBlock* block) {
     fields.push_back("hosts");
     fields.push_back("size");
     fields.push_back("dirty");
+    fields.push_back("lastAccessTime");
     fields.push_back("bucketName");
     fields.push_back("objName");
 
     try {
-      client.hmget(key, fields, [&key, &hosts, &size, &dirty, &bucketName, &objName, &keyExist](cpp_redis::reply &reply) {
+      client.hmget(key, fields, [&key, &hosts, &size, &dirty, &lastAccessTime, &bucketName, &objName, &keyExist](cpp_redis::reply &reply) {
         if (reply.is_array()) {
 	  auto arr = reply.as_array();
 
@@ -307,9 +310,10 @@ int BlockDirectory::get_value(CacheBlock* block) {
 	    key = arr[0].as_string();
 	    hosts = arr[1].as_string();
 	    size = arr[2].as_string();
-	    dirty = arr[2].as_string();
-	    bucketName = arr[3].as_string();
-	    objName = arr[4].as_string();
+	    dirty = arr[3].as_string();
+	    lastAccessTime = arr[4].as_string();
+	    bucketName = arr[5].as_string();
+	    objName = arr[6].as_string();
 	  }
 	}
       });
@@ -322,6 +326,12 @@ int BlockDirectory::get_value(CacheBlock* block) {
 
       /* Currently, there can only be one host */ // update -Sam
       block->size = std::stoi(size);
+
+      struct std::tm tm;
+      std::istringstream(lastAccessTime) >> std::get_time(&tm, "%T");
+      strptime(lastAccessTime.c_str(), "%T", &tm);
+      block->lastAccessTime = mktime(&tm);
+
       block->dirty = std::stoi(dirty);
       block->cacheObj.bucketName = bucketName;
       block->cacheObj.objName = objName;
@@ -401,6 +411,12 @@ int BlockDirectory::update_field(CacheBlock* block, std::string field, std::stri
       block->cacheObj.objName = value;
     else if (field == "hostsList")
       block->hostsList.push_back(value);
+    else if (field == "lastAccessTime"){
+      struct std::tm tm;
+      std::istringstream(value) >> std::get_time(&tm, "%T");
+      strptime(value.c_str(), "%T", &tm);
+      block->lastAccessTime = mktime(&tm);
+    }
 
     std::vector< std::pair<std::string, std::string> > list;
     list.push_back(std::make_pair(field, value));
@@ -454,7 +470,7 @@ std::string BlockDirectory::get_field(std::string key, std::string field){
       value += hosts;
     }
     else{
-     try {
+      try {
         client.hget(key, field, [&value](cpp_redis::reply& reply) {
           if (!reply.is_null()) {
             value = reply.as_string();

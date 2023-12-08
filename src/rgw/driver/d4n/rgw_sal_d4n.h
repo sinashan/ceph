@@ -21,12 +21,20 @@
 #include "rgw_role.h"
 #include "common/dout.h" 
 #include "rgw_aio_throttle.h"
+#include "rgw_ssd_driver.h"
+#include "rgw_redis_driver.h"
 #include "rgw_rest_client.h"
 
 #include "driver/d4n/d4n_directory.h"
 #include "driver/d4n/d4n_policy.h"
 
 #include <boost/intrusive/list.hpp>
+//#include <boost/asio/io_context.hpp>
+//#include <boost/redis/connection.hpp>
+
+namespace rgw::d4n {
+  class PolicyDriver;
+}
 
 namespace rgw { namespace sal {
 
@@ -37,7 +45,6 @@ class D4NFilterDriver : public FilterDriver {
     rgw::d4n::BlockDirectory* blockDir;
     rgw::d4n::CacheBlock* cacheBlock;
     rgw::d4n::PolicyDriver* policyDriver;
-    rgw::d4n::PolicyDriver* lruPolicyDriver;
 
   public:
     CephContext *cct;
@@ -61,7 +68,7 @@ class D4NFilterDriver : public FilterDriver {
     rgw::d4n::ObjectDirectory* get_obj_dir() { return objDir; }
     rgw::d4n::BlockDirectory* get_block_dir() { return blockDir; }
     rgw::d4n::CacheBlock* get_cache_block() { return cacheBlock; }
-    rgw::d4n::PolicyDriver* get_policy_driver() { return lruPolicyDriver; }
+    rgw::d4n::PolicyDriver* get_policy_driver() { return policyDriver; }
 };
 
 class D4NFilterUser : public FilterUser {
@@ -108,6 +115,7 @@ class D4NFilterBucket : public FilterBucket {
 class D4NFilterObject : public FilterObject {
   private:
     D4NFilterDriver* driver;
+    std::string version;
 
   public:
     struct D4NFilterReadOp : FilterReadOp {
@@ -115,7 +123,7 @@ class D4NFilterObject : public FilterObject {
 	class D4NFilterGetCB: public RGWGetDataCB {
 	  private:
 	    D4NFilterDriver* filter;
-	    std::string oid;
+	    std::string prefix;
 	    D4NFilterObject* source;
 	    RGWGetDataCB* client_cb;
 	    uint64_t ofs = 0, len = 0;
@@ -123,16 +131,17 @@ class D4NFilterObject : public FilterObject {
 	    bool last_part{false};
 	    std::mutex d4n_get_data_lock;
 	    bool write_to_cache{true};
-      const DoutPrefixProvider* dpp;
+      	    const DoutPrefixProvider* dpp;
+	    optional_yield* y;
 
 	  public:
-	    D4NFilterGetCB(D4NFilterDriver* _filter, std::string& _oid, D4NFilterObject* _source) : filter(_filter), 
-									  oid(_oid), 
+	    D4NFilterGetCB(D4NFilterDriver* _filter, D4NFilterObject* _source) : filter(_filter), 
 								    source(_source) {}
 
 	    int handle_data(bufferlist& bl, off_t bl_ofs, off_t bl_len) override;
-	    void set_client_cb(RGWGetDataCB* client_cb, const DoutPrefixProvider* dpp) { this->client_cb = client_cb; this->dpp = dpp;}
+	    void set_client_cb(RGWGetDataCB* client_cb, const DoutPrefixProvider* dpp, optional_yield* y) { this->client_cb = client_cb; this->dpp = dpp; this->y = y;}
 	    void set_ofs(uint64_t ofs) { this->ofs = ofs; }
+      	    void set_prefix(const std::string& prefix) { this->prefix = prefix; }
 	    int flush_last_part();
 	    void bypass_cache_write() { this->write_to_cache = false; }
 	};
@@ -142,8 +151,8 @@ class D4NFilterObject : public FilterObject {
 	D4NFilterReadOp(std::unique_ptr<ReadOp> _next, D4NFilterObject* _source) : FilterReadOp(std::move(_next)),
 										   source(_source) 
         {
-	  std::string oid = source->get_bucket()->get_name() + "_" + source->get_key().get_oid();
-          cb = std::make_unique<D4NFilterGetCB>(source->driver, oid, source); 
+	  //std::string oid = source->get_bucket()->get_name() + "_" + source->get_key().get_oid();
+          cb = std::make_unique<D4NFilterGetCB>(source->driver, source); 
 	}
 	virtual ~D4NFilterReadOp() = default;
 
@@ -205,9 +214,13 @@ class D4NFilterObject : public FilterObject {
                                optional_yield y, const DoutPrefixProvider* dpp) override;
     virtual int delete_obj_attrs(const DoutPrefixProvider* dpp, const char* attr_name,
                                optional_yield y) override;
+    virtual ceph::real_time get_mtime(void) const override { return next->get_mtime(); };
 
     virtual std::unique_ptr<ReadOp> get_read_op() override;
     virtual std::unique_ptr<DeleteOp> get_delete_op() override;
+
+    void set_object_version(const std::string& version) { this->version = version; }
+    const std::string get_object_version() { return this->version; }
 };
 
 class D4NFilterWriter : public FilterWriter {
