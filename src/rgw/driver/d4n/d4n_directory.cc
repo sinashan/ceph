@@ -204,7 +204,7 @@ int BlockDirectory::find_client(cpp_redis::client* client) {
 }
 
 std::string BlockDirectory::build_index(CacheBlock* block) {
-  return block->cacheObj.bucketName + "_" + block->cacheObj.objName + "_" + boost::lexical_cast<std::string>(block->blockId);
+  return block->cacheObj.bucketName + "_" + block->cacheObj.objName + "_" + boost::lexical_cast<std::string>(block->blockId) + "_" + std::to_string(block->size);
 }
 
 int BlockDirectory::exist_key(std::string key) {

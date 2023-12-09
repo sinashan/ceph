@@ -521,7 +521,7 @@ int SSDDriver::set_attr(const DoutPrefixProvider* dpp, const std::string& key, c
     std::string location = partition_info.location + key;
     ldpp_dout(dpp, 20) << "SSDCache: " << __func__ << "(): location=" << location << dendl;
 
-    ldpp_dout(dpp, 20) << "SSDCache: " << __func__ << "(): set_attr: key: " << attr_name << " val: " << attr_val << dendl;
+    ldpp_dout(dpp, 20) << "SSDCache: " << __func__ << "(): set_attr: key: " << key  << " attr_name: "<< attr_name << " val: " << attr_val << dendl;
 
     return setxattr(location.c_str(), attr_name.c_str(), attr_val.c_str(), attr_val.size(), 0);
 }

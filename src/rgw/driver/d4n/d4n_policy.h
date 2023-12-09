@@ -52,7 +52,7 @@ class CachePolicy {
     virtual int exist_key(std::string key) = 0;
     //virtual int get_block(const DoutPrefixProvider* dpp, CacheBlock* block, rgw::cache::CacheDriver* cacheNode) = 0;
     virtual int eviction(const DoutPrefixProvider* dpp, uint64_t size, optional_yield y) = 0;
-    virtual void update(const DoutPrefixProvider* dpp, std::string& key, uint64_t offset, uint64_t len, std::string version, int dirty, time_t lastAccessTime, optional_yield y) = 0;
+    virtual std::string update(const DoutPrefixProvider* dpp, std::string& key, uint64_t offset, uint64_t len, std::string version, int dirty, time_t lastAccessTime, optional_yield y) = 0;
     virtual void cleaning(const DoutPrefixProvider* dpp) = 0;
     virtual Address get_addr() { return addr; }
     virtual void shutdown() = 0;
@@ -133,7 +133,7 @@ class LFUDAPolicy : public CachePolicy {
     virtual int exist_key(std::string key) override { return CachePolicy::exist_key(key); }
     //virtual int get_block(const DoutPrefixProvider* dpp, CacheBlock* block, rgw::cache::CacheDriver* cacheNode) override;
     virtual int eviction(const DoutPrefixProvider* dpp, uint64_t size, optional_yield y) override;
-    virtual void update(const DoutPrefixProvider* dpp, std::string& key, uint64_t offset, uint64_t len, std::string version, int dirty, time_t lastAccessTime, optional_yield y) override;
+    virtual std::string update(const DoutPrefixProvider* dpp, std::string& key, uint64_t offset, uint64_t len, std::string version, int dirty, time_t lastAccessTime, optional_yield y) override;
     virtual void cleaning(const DoutPrefixProvider* dpp) override;
     rgw::cache::CacheDriver* get_cacheDriver(){return cacheDriver;}
 };
@@ -179,7 +179,7 @@ class LRUPolicy : public CachePolicy {
     virtual int exist_key(std::string key) override;
     //virtual int get_block(const DoutPrefixProvider* dpp, CacheBlock* block, rgw::cache::CacheDriver* cacheNode) override;
     virtual int eviction(const DoutPrefixProvider* dpp, uint64_t size, optional_yield y) override;
-    virtual void update(const DoutPrefixProvider* dpp, std::string& key, uint64_t offset, uint64_t len, std::string version, int dirty, time_t lastAccessTime, optional_yield y) override;
+    virtual std::string update(const DoutPrefixProvider* dpp, std::string& key, uint64_t offset, uint64_t len, std::string version, int dirty, time_t lastAccessTime, optional_yield y) override;
     bool erase(const DoutPrefixProvider* dpp, const std::string& key);
     virtual void cleaning(const DoutPrefixProvider* dpp) override {}
     rgw::cache::CacheDriver* get_cacheDriver(){return cacheDriver;}

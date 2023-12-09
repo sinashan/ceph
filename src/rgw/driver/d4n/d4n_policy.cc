@@ -129,7 +129,7 @@ int LFUDAPolicy::set_local_weight_sum(size_t weight, optional_yield y) {
     }); 
 
   dout(20) << "AMIN: LFUDAPolicy::" << __func__ << " : " << __LINE__ << dendl;
-    client.sync_commit();
+    client.sync_commit(std::chrono::milliseconds(1000));
   } catch(std::exception &e) {
   dout(20) << "AMIN: LFUDAPolicy::" << __func__ << " : " << __LINE__ << dendl;
     return -1;
@@ -174,6 +174,7 @@ int LFUDAPolicy::get_local_weight_sum(optional_yield y) {
     return -1;
   }
 
+  dout(20) << "AMIN: LFUDAPolicy::" << __func__ << " : " << __LINE__ << " weight is: " << weight << dendl;
   return weight;
 }
 
@@ -415,10 +416,11 @@ int LFUDAPolicy::eviction(const DoutPrefixProvider* dpp, uint64_t size, optional
 #endif
 }
 
-void LFUDAPolicy::update(const DoutPrefixProvider* dpp, std::string& key, uint64_t offset, uint64_t len, std::string version, int dirty, time_t lastAccessTime, optional_yield y)
+std::string LFUDAPolicy::update(const DoutPrefixProvider* dpp, std::string& key, uint64_t offset, uint64_t len, std::string version, int dirty, time_t lastAccessTime, optional_yield y)
 {
   using handle_type = boost::heap::fibonacci_heap<LFUDAEntry*, boost::heap::compare<EntryComparator<LFUDAEntry>>>::handle_type;
 
+  ldpp_dout(dpp, 20) << "AMIN: LFUDAPolicy::" << __func__ << "(): key is: " << key << dendl;
   int age = get_age(); 
   int localWeight = age;
   auto entry = find_entry(key);
@@ -435,16 +437,20 @@ void LFUDAPolicy::update(const DoutPrefixProvider* dpp, std::string& key, uint64
   e->set_handle(handle);
   entries_map.emplace(key, e);
 
+  /* AMIN: moved to d4n driver
   if (cacheDriver->set_attr(dpp, key, "user.rgw.localWeight", std::to_string(localWeight), y) < 0) 
     ldpp_dout(dpp, 10) << "LFUDAPolicy::" << __func__ << "(): CacheDriver set_attr method failed." << dendl;
+  */
 
   ldpp_dout(dpp, 20) << "AMIN: LFUDAPolicy::" << __func__ << "(): set_attr is passed!" << dendl;
   auto localWeights = get_local_weight_sum(y);
   ldpp_dout(dpp, 20) << "AMIN: LFUDAPolicy::" << __func__ << " : " << __LINE__ << dendl;
   localWeights += localWeight;
+  ldpp_dout(dpp, 20) << "AMIN: LFUDAPolicy::" << __func__ << " : " << __LINE__ << "local Weight: " << localWeight << "localWeights: " << localWeights << dendl;
   if (set_local_weight_sum(localWeights, y) < 0)
     ldpp_dout(dpp, 10) << "LFUDAPolicy::" << __func__ << "(): Failed to update sum of local weights for the cache backend." << dendl;
   ldpp_dout(dpp, 20) << "AMIN: LFUDAPolicy::" << __func__ << "(): Done!" << dendl;
+  return std::to_string(localWeight);
 }
 
 bool LFUDAPolicy::erase(const DoutPrefixProvider* dpp, const std::string& key, optional_yield y)
@@ -517,13 +523,14 @@ int LRUPolicy::eviction(const DoutPrefixProvider* dpp, uint64_t size, optional_y
 
 }
 
-void LRUPolicy::update(const DoutPrefixProvider* dpp, std::string& key, uint64_t offset, uint64_t len, std::string version, int dirty, time_t lastAccessTime, optional_yield y)
+std::string LRUPolicy::update(const DoutPrefixProvider* dpp, std::string& key, uint64_t offset, uint64_t len, std::string version, int dirty, time_t lastAccessTime, optional_yield y)
 {
   erase(dpp, key);
   const std::lock_guard l(lru_lock);
   Entry *e = new Entry(key, offset, len);
   entries_lru_list.push_back(*e);
   entries_map.emplace(key, e);
+  return "";
 }
 
 bool LRUPolicy::erase(const DoutPrefixProvider* dpp, const std::string& key)

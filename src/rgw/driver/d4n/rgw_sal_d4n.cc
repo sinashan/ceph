@@ -522,13 +522,17 @@ int D4NFilterObject::D4NFilterReadOp::iterate(const DoutPrefixProvider* dpp, int
                         RGWGetDataCB* cb, optional_yield y) 
 {
   const uint64_t window_size = g_conf()->rgw_get_obj_window_size;
-  std::string version = source->get_object_version();
   std::string prefix;
+  std::string version = "";
+  /* //FIXME: AMIN: uncomment this and apply it to write operation
+  std::string version = source->get_object_version(); 
   if (version.empty()) { //for versioned objects, get_oid() returns an oid with versionId added
     prefix = source->get_bucket()->get_name() + "_" + source->get_key().get_oid();
   } else {
     prefix = source->get_bucket()->get_name() + "_" + version + "_" + source->get_key().get_oid();
   }
+  */
+  prefix = source->get_bucket()->get_name() + "_" + source->get_key().get_oid();
 
 
   ldpp_dout(dpp, 20) << "D4NFilterObject::iterate:: " << "prefix: " << prefix << " ofs: " << ofs << " end: " << end << dendl;
@@ -580,9 +584,11 @@ int D4NFilterObject::D4NFilterReadOp::iterate(const DoutPrefixProvider* dpp, int
 //    std::string oid_in_cache = source->get_bucket()->get_name() + "_" + oid + "_" + std::to_string(adjusted_start_ofs) + "_" + std::to_string(part_len);
 
     std::string oid_in_cache = prefix + "_" + std::to_string(adjusted_start_ofs) + "_" + std::to_string(part_len);
+    /* FIXME : AMIN
     if (version.empty()) {
       version = source->get_instance();
     }
+    */
     std::string key = oid_in_cache;
     int dirty = 0;
     auto lastAccessTime = time(NULL);
@@ -602,7 +608,10 @@ int D4NFilterObject::D4NFilterReadOp::iterate(const DoutPrefixProvider* dpp, int
       ldpp_dout(dpp, 20) << "D4NFilterObject: " << __func__ << __LINE__ << "key is: " << key << dendl;
       auto completed = source->driver->get_cache_driver()->get_async(dpp, y, aio.get(), key, read_ofs, len_to_read, cost, id); 
 
-      source->driver->get_policy_driver()->get_cache_policy()->update(dpp, oid_in_cache, adjusted_start_ofs, part_len, version, dirty, lastAccessTime, y);
+      std::string localWeight = source->driver->get_policy_driver()->get_cache_policy()->update(dpp, oid_in_cache, adjusted_start_ofs, part_len, version, dirty, lastAccessTime, y);
+
+      if (source->driver->get_cache_driver()->set_attr(dpp, key, "user.rgw.localWeight", localWeight, y) < 0) 
+        ldpp_dout(dpp, 10) << "LFUDAPolicy::" << __func__ << "(): CacheDriver set_attr method failed." << dendl;
 
       ldpp_dout(dpp, 20) << "D4NFilterObject::iterate:: " << __func__ << "(): Info: flushing data for oid: " << key << dendl;
 
@@ -632,7 +641,9 @@ int D4NFilterObject::D4NFilterReadOp::iterate(const DoutPrefixProvider* dpp, int
         ldpp_dout(dpp, 20) << "D4NFilterObject: " << __func__ << __LINE__ << "key is: " << key << dendl;
         auto completed = source->driver->get_cache_driver()->get_async(dpp, y, aio.get(), key, read_ofs, len_to_read, cost, id);  
 
-        source->driver->get_policy_driver()->get_cache_policy()->update(dpp, oid_in_cache, adjusted_start_ofs, obj_max_req_size, version, dirty, lastAccessTime, y);
+        std::string localWeight = source->driver->get_policy_driver()->get_cache_policy()->update(dpp, oid_in_cache, adjusted_start_ofs, obj_max_req_size, version, dirty, lastAccessTime, y);
+        if (source->driver->get_cache_driver()->set_attr(dpp, key, "user.rgw.localWeight", localWeight, y) < 0) 
+          ldpp_dout(dpp, 10) << "LFUDAPolicy::" << __func__ << "(): CacheDriver set_attr method failed." << dendl;
 
         ldpp_dout(dpp, 20) << "D4NFilterObject::iterate:: " << __func__ << "(): Info: flushing data for oid: " << key << dendl;
 
@@ -734,10 +745,13 @@ int D4NFilterObject::D4NFilterReadOp::D4NFilterGetCB::handle_data(bufferlist& bl
     existing_block.cacheObj.objName = block.cacheObj.objName;
     existing_block.cacheObj.bucketName = block.cacheObj.bucketName;
     Attrs attrs; // empty attrs for cache sets
+    /* FIXME: AMIN
     std::string version = source->get_object_version();
     if (version.empty()) {
       version = source->get_instance();
     }
+    */
+    std::string version = "";
     ldpp_dout(dpp, 20) << __func__ << ": version stored in update method is: " << version << dendl;
 
     if (bl.length() > 0 && last_part) { // if bl = bl_rem has data and this is the last part, write it to cache
@@ -755,7 +769,9 @@ int D4NFilterObject::D4NFilterReadOp::D4NFilterGetCB::handle_data(bufferlist& bl
         freeSpace += filter->get_policy_driver()->get_cache_policy()->eviction(dpp, block.size, *y);
       }
       if (filter->get_cache_driver()->put_async(dpp, oid, bl, bl.length(), attrs) == 0) {
-        filter->get_policy_driver()->get_cache_policy()->update(dpp, oid, ofs, bl.length(), version, dirty, lastAccessTime, *y);
+	std::string localWeight = filter->get_policy_driver()->get_cache_policy()->update(dpp, oid, ofs, bl.length(), version, dirty, lastAccessTime, *y);
+        if (source->driver->get_cache_driver()->set_attr(dpp, oid, "user.rgw.localWeight", localWeight, *y) < 0) 
+          ldpp_dout(dpp, 10) << "LFUDAPolicy::" << __func__ << "(): CacheDriver set_attr method failed." << dendl;
         /* Store block in directory */
         if (!blockDir->exist_key(oid)) {
           int ret = blockDir->set_value(&block);
@@ -799,7 +815,9 @@ int D4NFilterObject::D4NFilterReadOp::D4NFilterGetCB::handle_data(bufferlist& bl
         freeSpace += filter->get_policy_driver()->get_cache_policy()->eviction(dpp, block.size, *y);
       }
       if (filter->get_cache_driver()->put_async(dpp, oid, bl, bl.length(), attrs) == 0) {
-        filter->get_policy_driver()->get_cache_policy()->update(dpp, oid, ofs, bl.length(), version, dirty, lastAccessTime, *y);
+	std::string localWeight = filter->get_policy_driver()->get_cache_policy()->update(dpp, oid, ofs, bl.length(), version, dirty, lastAccessTime, *y);
+        if (source->driver->get_cache_driver()->set_attr(dpp, oid, "user.rgw.localWeight", localWeight, *y) < 0) 
+          ldpp_dout(dpp, 10) << "LFUDAPolicy::" << __func__ << "(): CacheDriver set_attr method failed." << dendl;
         /* Store block in directory */
         if (!blockDir->exist_key(oid)) {
           int ret = blockDir->set_value(&block);
@@ -850,7 +868,9 @@ int D4NFilterObject::D4NFilterReadOp::D4NFilterGetCB::handle_data(bufferlist& bl
           freeSpace += filter->get_policy_driver()->get_cache_policy()->eviction(dpp, block.size, *y);
         }
         if (filter->get_cache_driver()->put_async(dpp, oid, bl_rem, bl_rem.length(), attrs) == 0) {
-          filter->get_policy_driver()->get_cache_policy()->update(dpp, oid, ofs, bl_rem.length(),version, dirty, lastAccessTime, *y);
+          std::string localWeight = filter->get_policy_driver()->get_cache_policy()->update(dpp, oid, ofs, bl_rem.length(),version, dirty, lastAccessTime, *y);
+          if (source->driver->get_cache_driver()->set_attr(dpp, oid, "user.rgw.localWeight", localWeight, *y) < 0) 
+            ldpp_dout(dpp, 10) << "LFUDAPolicy::" << __func__ << "(): CacheDriver set_attr method failed." << dendl;
           /* Store block in directory */
           if (!blockDir->exist_key(oid)) {
             int ret = blockDir->set_value(&block);
@@ -986,13 +1006,14 @@ int D4NFilterWriter::S3BackendPrepare(optional_yield y)
 
 int D4NFilterWriter::process(bufferlist&& data, uint64_t offset)
 { 
+  ldpp_dout(save_dpp, 20) << "AMIN: D4N Filter: " << __func__ << ": " << __LINE__ << dendl;
   if (d4n_writecache == true){
     bufferlist bl = data;
     off_t bl_len = bl.length();
     off_t ofs = offset;
     bool dirty = 1;
     optional_yield y = null_yield;
-    std::string version = "0";
+    std::string version = "";
     rgw::d4n::BlockDirectory* blockDir = filter->get_block_dir();
     rgw::d4n::CacheBlock block;
 
@@ -1003,6 +1024,7 @@ int D4NFilterWriter::process(bufferlist&& data, uint64_t offset)
     block.cacheObj.objName = obj->get_key().get_oid();
     block.cacheObj.dirty = 1;
 
+  ldpp_dout(save_dpp, 20) << "AMIN: D4N Filter: " << __func__ << ": " << __LINE__ << dendl;
     if (bl.length() > 0) { // if bl = bl_rem has data and this is the last part, write it to cache
       /* FIXME:  to add unique ID we have to generate a random number.
        * but we need to make sure it doesn't conflict with backend uniqueID.
@@ -1012,20 +1034,28 @@ int D4NFilterWriter::process(bufferlist&& data, uint64_t offset)
       */
       std::string oid = obj->get_bucket()->get_name() + "_" + obj->get_key().get_oid() + "_" + std::to_string(ofs);
       std::string oid_in_cache = "D_" + oid + "_" + std::to_string(bl_len);
+      std::string oid_in_dir = oid + "_" + std::to_string(bl_len);
       block.size = bl.length();
       block.blockId = ofs;
       block.dirty = 1;
       auto lastAccessTime = time(NULL);
       uint64_t freeSpace = filter->get_cache_driver()->get_free_space(save_dpp);
+  ldpp_dout(save_dpp, 20) << "AMIN: D4N Filter: " << __func__ << ": " << __LINE__ << dendl;
       while(freeSpace < block.size) {
         freeSpace += filter->get_policy_driver()->get_cache_policy()->eviction(save_dpp, block.size, y);
       }
+  ldpp_dout(save_dpp, 20) << "AMIN: D4N Filter: " << __func__ << ": " << __LINE__ << dendl;
      if (filter->get_cache_driver()->put_async(save_dpp, oid_in_cache, bl, bl.length(), obj->get_attrs()) == 0) {
+  ldpp_dout(save_dpp, 20) << "AMIN: D4N Filter: " << __func__ << ": " << __LINE__ << dendl;
 	// FIXME: uncomment this
-        filter->get_policy_driver()->get_cache_policy()->update(save_dpp, oid_in_cache, ofs, bl.length(), version, dirty, lastAccessTime, y);
+        std::string localWeight = filter->get_policy_driver()->get_cache_policy()->update(save_dpp, oid_in_cache, ofs, bl.length(), version, dirty, lastAccessTime, y);
         ldpp_dout(save_dpp, 20) << "AMIN: D4N Filter: " << __func__ << ": update succeeded!" << dendl;
+
+        if (filter->get_cache_driver()->set_attr(save_dpp, oid_in_cache, "user.rgw.localWeight", localWeight, y) < 0) 
+          ldpp_dout(save_dpp, 10) << "LFUDAPolicy::" << __func__ << "(): CacheDriver set_attr method failed." << dendl;
+  ldpp_dout(save_dpp, 20) << "AMIN: D4N Filter: " << __func__ << ": " << __LINE__ << dendl;
         // Store block in directory
-        if (!blockDir->exist_key(oid)) {
+        if (!blockDir->exist_key(oid_in_dir)) {
           ldpp_dout(save_dpp, 20) << "AMIN: D4N Filter: " << __func__ << ": key does not exist in directory, calling set_value" << dendl;
           int ret = blockDir->set_value(&block);
           if (ret < 0) {
@@ -1038,6 +1068,7 @@ int D4NFilterWriter::process(bufferlist&& data, uint64_t offset)
      }
     } 
 
+  ldpp_dout(save_dpp, 20) << "AMIN: D4N Filter: " << __func__ << ": " << __LINE__ << dendl;
     if (s3_backend == true){
       return S3BackendProcess(std::move(data), offset);
     }
