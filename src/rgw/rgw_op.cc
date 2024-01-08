@@ -4411,12 +4411,17 @@ void RGWPutObj::execute(optional_yield y)
     emplace_attr(RGW_ATTR_OBJECT_RETENTION, std::move(obj_retention_bl));
   }
 
+  ldpp_dout(this, 20) << "AMIN: " << __func__ << ": size is: " << s->obj_size << dendl;
+  ldpp_dout(this, 20) << "AMIN: " << __func__ << ": etag is: " << etag << dendl;
+  ldpp_dout(this, 20) << "AMIN: " << __func__ << ": delete_at: " << delete_at << dendl;
+  ldpp_dout(this, 20) << "AMIN: " << __func__ << ": size is: " << s->obj_size << dendl;
   tracepoint(rgw_op, processor_complete_enter, s->req_id.c_str());
   const req_context rctx{this, s->yield, s->trace.get()};
   op_ret = processor->complete(s->obj_size, etag, &mtime, real_time(), attrs,
                                (delete_at ? *delete_at : real_time()), if_match, if_nomatch,
                                (user_data.empty() ? nullptr : &user_data), nullptr, nullptr,
                                rctx);
+
   tracepoint(rgw_op, processor_complete_exit, s->req_id.c_str());
 
   // send request to notification manager

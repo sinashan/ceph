@@ -231,10 +231,8 @@ int BlockDirectory::exist_key(std::string key) {
 
 int BlockDirectory::set_value(CacheBlock* block) {
   /* Creating the index based on objName */
-  dout(20) << "AMIN: Block Directiry: " << __func__ << dendl;
   std::string result;
   std::string key = build_index(block);
-  dout(20) << "AMIN: Block Directiry: " << __func__ << ": key is: " << key << dendl;
   if (!client.is_connected()) { 
     find_client(&client);
   }
@@ -248,7 +246,6 @@ int BlockDirectory::set_value(CacheBlock* block) {
   std::string endpoint = addr.host + ":" + std::to_string(addr.port);
   std::vector< std::pair<std::string, std::string> > list;
     
-  dout(20) << "AMIN: Block Directiry: " << __func__ << ": endpoint is: " << endpoint << dendl;
   /* Creating a list of the entry's properties */
   list.push_back(make_pair("key", key));
   list.push_back(make_pair("size", std::to_string(block->size)));
@@ -269,14 +266,12 @@ int BlockDirectory::set_value(CacheBlock* block) {
     client.sync_commit(std::chrono::milliseconds(1000));
 
     if (result != "OK") {
-      dout(20) << "AMIN: Block Directiry: " << __func__ << ": hmset faild!" << dendl;
       return -1;
     }
   } catch(std::exception &e) {
     return -1;
   }
 
-  dout(20) << "AMIN: Block Directiry: " << __func__ << ": hmset successed, returning! " << dendl;
   return 0;
 }
 
@@ -445,6 +440,55 @@ int BlockDirectory::update_field(CacheBlock* block, std::string field, std::stri
 
   return 0;
 }
+
+int BlockDirectory::update_field(std::string key, std::string field, std::string value) {
+  std::string result;
+
+  if (!client.is_connected()) {
+    find_client(&client);
+  }
+  
+  if (exist_key(key)) {
+    if (field == "hostsList") {
+      /* Append rather than overwrite */
+      std::string hosts;
+
+      try {
+        client.hget(key, "hostsList", [&hosts](cpp_redis::reply& reply) {
+          if (!reply.is_null()) {
+            hosts = reply.as_string();
+          }
+        });
+
+        client.sync_commit(std::chrono::milliseconds(1000));
+      } catch(std::exception &e) {
+        return -1;
+      }
+      
+      value += "_";
+      value += hosts;
+    }
+
+    try {
+      client.hset(key, field, value, [&result](cpp_redis::reply &reply) {
+	if (!reply.is_null()) {
+	  result = reply.as_string();
+	}
+      });
+
+      client.sync_commit(std::chrono::milliseconds(1000));
+
+      if (result != "OK") {
+	return -1;
+      }
+    } catch(std::exception &e) {
+      return -1;
+    }
+  }
+
+  return 0;
+}
+
 
 
 std::string BlockDirectory::get_field(std::string key, std::string field){

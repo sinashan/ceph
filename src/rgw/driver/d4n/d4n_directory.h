@@ -104,6 +104,7 @@ class BlockDirectory: public Directory {
     int del_value(CacheBlock* block);
 
     int update_field(CacheBlock* block, std::string field, std::string value);
+    int update_field(std::string key, std::string field, std::string value);
     std::string get_field(std::string key, std::string field);
 
   private:

@@ -156,7 +156,7 @@ int SSDDriver::get(const DoutPrefixProvider* dpp, const std::string& key, off_t 
         return -errno;
     }
 
-    nbytes = fread(buffer, sizeof(buffer), 1 , cache_file);
+    nbytes = fread(buffer, 1, sizeof(buffer), cache_file);
     if (nbytes != len) {
         ldpp_dout(dpp, 0) << "ERROR: put::io_read: fread has returned error: nbytes!=len, nbytes=" << nbytes << ", len=" << len << dendl;
         return -EIO;
@@ -168,7 +168,15 @@ int SSDDriver::get(const DoutPrefixProvider* dpp, const std::string& key, off_t 
         return -errno;
     }
 
-    ceph::encode(buffer, bl);
+    std::string tmp_s(buffer);
+    bl.append(buffer, sizeof(buffer));
+    //ceph::encode(buffer.to_str(), bl);
+    ldpp_dout(dpp, 0) << "AMIN: " << __func__ << " : " << __LINE__ << "buffer is: " << buffer << dendl;
+    ldpp_dout(dpp, 0) << "AMIN: " << __func__ << " : " << __LINE__ << "buffer len is: " << sizeof(buffer) << dendl;
+    ldpp_dout(dpp, 0) << "AMIN: " << __func__ << " : " << __LINE__ << "tmp_s is: " << tmp_s << dendl;
+    ldpp_dout(dpp, 0) << "AMIN: " << __func__ << " : " << __LINE__ << "tmp_s len is: " << tmp_s.length() << dendl;
+    ldpp_dout(dpp, 0) << "AMIN: " << __func__ << " : " << __LINE__ << "bl is: " << bl.to_str() << dendl;
+    ldpp_dout(dpp, 0) << "AMIN: " << __func__ << " : " << __LINE__ << "bl len is: " << bl.length() << dendl;
 
     if (attrs.size() > 0) {
         r = get_attrs(dpp, key, attrs, y);
@@ -533,8 +541,8 @@ int SSDDriver::delete_attr(const DoutPrefixProvider* dpp, const std::string& key
 
     return removexattr(location.c_str(), attr_name.c_str());
 }
-
-int SSDDriver::cleaning(const DoutPrefixProvider* dpp)
+/*
+int SSDDriver::cleaning(const DoutPrefixProvider* dpp, std::string key)
 {
     std::string path = partition_info.location;
     size_t found = 0;
@@ -542,15 +550,15 @@ int SSDDriver::cleaning(const DoutPrefixProvider* dpp)
 	if (entry.path().empty()){
 	    return 0;
         }
-    	ldpp_dout(dpp, 20) << "AMIN: " << __func__ << " : " << " Objects in cache are: " << entry.path() << dendl;
 	std::string objPath = entry.path().generic_string();
-	found = objPath.find("/D_");
-	if (found != std::string::npos) { //the begining of a dirty object should have "/D_"
+	//found = objPath.find("/D_");
+	found = objPath.find(key);
+	if (found != std::string::npos) { //object is in the cache
+	
 	    auto fileTime =  std::filesystem::last_write_time(entry.path());
 	    time_t last_write_time = std::chrono::system_clock::to_time_t(std::chrono::file_clock::to_sys(fileTime));
 	    time_t currentTime = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 	    auto elapsedTime = currentTime - last_write_time; 
-    	    ldpp_dout(dpp, 20) << "AMIN: " << __func__ << " : " << " Dirty objects in cache are: " << objPath << " elapsed time is: " << elapsedTime << " last write is: " << last_write_time << " current time is : " << currentTime << dendl;
 
 	    if (elapsedTime >= 10){
 		
@@ -559,6 +567,6 @@ int SSDDriver::cleaning(const DoutPrefixProvider* dpp)
     }
     return 0;
 }
-
+*/
 
 } } // namespace rgw::cache
