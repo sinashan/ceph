@@ -45,13 +45,12 @@ int CachePolicy::exist_key(std::string key) {
   return result;
 }
 
-int LFUDAPolicy::init(CephContext *_cct, const DoutPrefixProvider* dpp, rgw::sal::D4NFilterDriver *_d4nDriver) {
+int LFUDAPolicy::init(CephContext *_cct, const DoutPrefixProvider* dpp, rgw::sal::Driver *_driver) {
       cct = _cct;
       dir->init(_cct);
       addr.host = cct->_conf->rgw_d4n_host;
       addr.port = cct->_conf->rgw_d4n_port;
-      d4nDriver = _d4nDriver;
-      ldpp_dout(dpp, 20) << "AMIN: " << __func__  << __LINE__  << " : policty name is: " << d4nDriver->get_policy_driver()->get_policy_name() << dendl;
+      driver = _driver;
       
       tc = std::thread(&CachePolicy::cleaning, this, dpp);
       tc.detach();
@@ -617,20 +616,20 @@ void LFUDAPolicy::cleaning(const DoutPrefixProvider* dpp)
  	rgw_obj_key c_obj_key = rgw_obj_key(key); 		
     	ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : "  << __LINE__ << " c_obj_key is: " << c_obj_key << dendl;
 
-	std::unique_ptr<rgw::sal::User> c_user = d4nDriver->get_user(c_rgw_user);
+	std::unique_ptr<rgw::sal::User> c_user = driver->get_user(c_rgw_user);
     	ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : "  << __LINE__ << " c_user NAME is: " << c_user->get_id() << dendl;
 	std::unique_ptr<rgw::sal::Bucket> c_bucket;
 
         rgw_bucket c_rgw_bucket = rgw_bucket(c_rgw_user.to_str(), b_name, "");
 
-	int ret = d4nDriver->get_bucket(dpp, c_user.get(), c_rgw_bucket, &c_bucket, null_yield);
+	int ret = driver->get_bucket(dpp, c_user.get(), c_rgw_bucket, &c_bucket, null_yield);
     	ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : "  << __LINE__ << " c_bucket NAME " << c_bucket->get_name() << dendl;
 
 	std::unique_ptr<rgw::sal::Object> c_obj = c_bucket->get_object(c_obj_key);
     	ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : "  << __LINE__ << " c_obj NAME is: " << c_obj->get_key().get_oid() << dendl;
 
-	d4nDriver->set_write_to_backend(true); //set operation to cleaning
-	std::unique_ptr<rgw::sal::Writer> processor =  d4nDriver->get_atomic_writer(dpp,
+	//driver->set_write_to_backend(true); //set operation to cleaning
+	std::unique_ptr<rgw::sal::Writer> processor =  driver->get_atomic_writer(dpp,
 				  null_yield,
 				  c_obj.get(),
 				  c_rgw_user,
@@ -646,14 +645,15 @@ void LFUDAPolicy::cleaning(const DoutPrefixProvider* dpp)
     	  ldpp_dout(dpp, 20) << "processor->prepare() returned ret=" << op_ret << dendl;
     	  break;
   	}
-  	rgw::sal::DataProcessor *filter = processor.get();
 
 	std::string prefix = "D_"+b_name+"_"+key;
 	off_t lst = it->second->size;
   	off_t fst = 0;
   	off_t ofs = 0;
 
-  	do {
+	/*
+  	rgw::sal::DataProcessor *filter = processor.get();
+	do {
            ldpp_dout(dpp, 20) << "AMIN: " << __func__ << __LINE__ << dendl;
     	  ceph::bufferlist data;
     	  if (fst >= lst){
@@ -682,21 +682,27 @@ void LFUDAPolicy::cleaning(const DoutPrefixProvider* dpp)
   	} while (len > 0);
 
   	op_ret = filter->process({}, ofs);
+	*/
+    	ceph::bufferlist bl;
+    	std::string oid_in_cache = prefix+"_"+std::to_string(ofs)+"_"+std::to_string(lst);  	  
+    	cacheDriver->get(dpp, oid_in_cache, ofs, lst, bl, obj_attrs, null_yield);
+    	op_ret = processor->process(std::move(bl), ofs);
+
 
 	rgw::sal::Attrs attrs;
 	std::vector<std::string> storageClass = {"storageClass"};
   	const req_context rctx{dpp, null_yield, nullptr};
 	attrs[RGW_ATTR_STORAGE_CLASS] = bufferlist::static_from_string(storageClass[0]);
 
-  	c_obj->set_obj_size(ofs);
-        op_ret = processor->complete(ofs, "", nullptr, ceph::real_time(), attrs,
+  	c_obj->set_obj_size(lst);
+        op_ret = processor->complete(lst, "", nullptr, ceph::real_time(), attrs,
                                ceph::real_time(), nullptr, nullptr,
                                nullptr, nullptr, nullptr,
                                rctx);
-	d4nDriver->set_write_to_backend(false); //set operation to cleaning
+	//d4nDriver->set_write_to_backend(false); //set operation to cleaning
 
 	//data is clean now, updating in-memory metadata
-	//it->second->dirty = 0;
+	it->second->dirty = 0;
         //set_dirty(it->first, 0, null_yield);	
 
       }

@@ -65,12 +65,12 @@ class CachePolicy {
     CephContext* cct;
     Address addr;
     std::thread tc;
-    rgw::sal::D4NFilterDriver *d4nDriver; 
+    rgw::sal::Driver *driver; 
 
     CachePolicy() : addr() {}
     virtual ~CachePolicy() = default;
 
-    virtual int init(CephContext *_cct, const DoutPrefixProvider* dpp, rgw::sal::D4NFilterDriver* d4nDriver) {return 0;}
+    virtual int init(CephContext *_cct, const DoutPrefixProvider* dpp, rgw::sal::Driver* driver) {return 0;}
 
     int find_client(cpp_redis::client* client);
     virtual int exist_key(std::string key) = 0;
@@ -135,7 +135,7 @@ class LFUDAPolicy : public CachePolicy {
       delete dir;
     }
 
-    virtual int init(CephContext *_cct, const DoutPrefixProvider* dpp, rgw::sal::D4NFilterDriver *_d4nDriver) override;
+    virtual int init(CephContext *_cct, const DoutPrefixProvider* dpp, rgw::sal::Driver *_driver) override;
     int set_dirty(std::string key, int dirty, optional_yield y);
     int set_age(int age, const DoutPrefixProvider* dpp);
     int get_age(const DoutPrefixProvider* dpp);
@@ -203,7 +203,7 @@ class LRUPolicy : public CachePolicy {
       delete dir;
     }
 
-    virtual int init(CephContext *_cct, const DoutPrefixProvider* dpp, rgw::sal::D4NFilterDriver* _d4nDriver) {return 0;}
+    virtual int init(CephContext *_cct, const DoutPrefixProvider* dpp, rgw::sal::Driver* _driver) {return 0;}
  
   private:
     std::mutex lru_lock;

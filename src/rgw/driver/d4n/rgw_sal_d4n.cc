@@ -81,7 +81,7 @@ int D4NFilterDriver::initialize(CephContext *cct, const DoutPrefixProvider *dpp)
   objDir->init(cct);
   blockDir->init(cct);
 
-  policyDriver->get_cache_policy()->init(cct, dpp, this);
+  policyDriver->get_cache_policy()->init(cct, dpp, next);
 
   return 0;
 }

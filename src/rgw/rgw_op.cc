@@ -4259,12 +4259,18 @@ void RGWPutObj::execute(optional_yield y)
   }
   tracepoint(rgw_op, before_data_transfer, s->req_id.c_str());
   do {
+  ldpp_dout(this, 20) << "AMIN: " << __func__ << ": " << __LINE__ << ": fst is: " << fst << dendl;
+  ldpp_dout(this, 20) << "AMIN: " << __func__ << ": " << __LINE__ << ": lst is: " << lst << dendl;
     bufferlist data;
-    if (fst > lst)
+    if (fst > lst){
+  ldpp_dout(this, 20) << "AMIN: " << __func__ << ": " << __LINE__ << ": fst is: " << fst << dendl;
       break;
+    }
     if (copy_source.empty()) {
+  ldpp_dout(this, 20) << "AMIN: " << __func__ << ": " << __LINE__ << ": fst is: " << fst << dendl;
       len = get_data(data);
     } else {
+  ldpp_dout(this, 20) << "AMIN: " << __func__ << ": " << __LINE__ << ": fst is: " << fst << dendl;
       off_t cur_lst = min<off_t>(fst + s->cct->_conf->rgw_max_chunk_size - 1, lst);
       op_ret = get_data(fst, cur_lst, data);
       if (op_ret < 0)
@@ -4285,6 +4291,9 @@ void RGWPutObj::execute(optional_yield y)
       hash.Update((const unsigned char *)data.c_str(), data.length());
     }
 
+  ldpp_dout(this, 20) << "AMIN: " << __func__ << ": fst is: " << fst << dendl;
+  ldpp_dout(this, 20) << "AMIN: " << __func__ << ": lst is: " << lst << dendl;
+  ldpp_dout(this, 20) << "AMIN: " << __func__ << ": ofs is: " << ofs << dendl;
     op_ret = filter->process(std::move(data), ofs);
     if (op_ret < 0) {
       ldpp_dout(this, 20) << "processor->process() returned ret="
