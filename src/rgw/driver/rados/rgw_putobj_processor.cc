@@ -132,6 +132,7 @@ int RadosWriter::set_stripe_obj(const rgw_raw_obj& raw_obj)
 
 int RadosWriter::process(bufferlist&& bl, uint64_t offset)
 {
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << __LINE__ << " : DATA is: " << bl.to_str() <<  dendl;
   bufferlist data = std::move(bl);
   const uint64_t cost = data.length();
   if (cost == 0) { // no empty writes, use aio directly for creates
@@ -251,6 +252,7 @@ int ManifestObjectProcessor::next(uint64_t offset, uint64_t *pstripe_size)
 int AtomicObjectProcessor::process_first_chunk(bufferlist&& data,
                                                DataProcessor **processor)
 {
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << "DATA is: " << data.to_str() << dendl;
   first_chunk = std::move(data);
   *processor = &stripe;
   return 0;
@@ -258,6 +260,7 @@ int AtomicObjectProcessor::process_first_chunk(bufferlist&& data,
 
 int AtomicObjectProcessor::prepare(optional_yield y)
 {
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << __LINE__ << dendl;
   uint64_t max_head_chunk_size;
   uint64_t head_max_size;
   uint64_t chunk_size = 0;
@@ -328,6 +331,7 @@ int AtomicObjectProcessor::prepare(optional_yield y)
   // initialize the processors
   chunk = ChunkProcessor(&writer, chunk_size);
   stripe = StripeProcessor(&chunk, this, head_max_size);
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << __LINE__ << dendl;
   return 0;
 }
 
@@ -344,11 +348,13 @@ int AtomicObjectProcessor::complete(size_t accounted_size,
                                     bool *pcanceled, 
                                     const req_context& rctx)
 {
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << __LINE__ << " : size is: " << accounted_size <<  dendl;
   int r = writer.drain();
   if (r < 0) {
     return r;
   }
   const uint64_t actual_size = get_actual_size();
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << __LINE__ << " : actual size is: " << actual_size <<  dendl;
   r = manifest_gen.create_next(actual_size);
   if (r < 0) {
     return r;
@@ -356,31 +362,52 @@ int AtomicObjectProcessor::complete(size_t accounted_size,
 
   obj_ctx.set_atomic(head_obj);
 
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << __LINE__ <<  dendl;
   RGWRados::Object op_target(store, bucket_info, obj_ctx, head_obj);
 
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << __LINE__ <<  dendl;
   /* some object types shouldn't be versioned, e.g., multipart parts */
   op_target.set_versioning_disabled(!bucket_info.versioning_enabled());
 
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << __LINE__ <<  dendl;
   RGWRados::Object::Write obj_op(&op_target);
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << __LINE__ <<  dendl;
   obj_op.meta.data = &first_chunk;
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << __LINE__ <<  dendl;
   obj_op.meta.manifest = &manifest;
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << __LINE__ <<  dendl;
   obj_op.meta.ptag = &unique_tag; /* use req_id as operation tag */
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << __LINE__ <<  dendl;
   obj_op.meta.if_match = if_match;
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << __LINE__ <<  dendl;
   obj_op.meta.if_nomatch = if_nomatch;
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << __LINE__ <<  dendl;
   obj_op.meta.mtime = mtime;
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << __LINE__ <<  dendl;
   obj_op.meta.set_mtime = set_mtime;
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << __LINE__ <<  dendl;
   obj_op.meta.owner = owner;
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << __LINE__ <<  dendl;
   obj_op.meta.flags = PUT_OBJ_CREATE;
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << __LINE__ <<  dendl;
   obj_op.meta.olh_epoch = olh_epoch;
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << __LINE__ <<  dendl;
   obj_op.meta.delete_at = delete_at;
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << __LINE__ <<  dendl;
   obj_op.meta.user_data = user_data;
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << __LINE__ <<  dendl;
   obj_op.meta.zones_trace = zones_trace;
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << __LINE__ <<  dendl;
   obj_op.meta.modify_tail = true;
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << __LINE__ <<  dendl;
 
   read_cloudtier_info_from_attrs(attrs, obj_op.meta.category, manifest);
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << __LINE__ <<  dendl;
 
   r = obj_op.write_meta(actual_size, accounted_size, attrs, rctx);
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << __LINE__ <<  dendl;
   if (r < 0) {
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << __LINE__ <<  dendl;
     if (r == -ETIMEDOUT) {
       // The head object write may eventually succeed, clear the set of objects for deletion. if it
       // doesn't ever succeed, we'll orphan any tail objects as if we'd crashed before that write
@@ -389,12 +416,17 @@ int AtomicObjectProcessor::complete(size_t accounted_size,
     return r;
   }
   if (!obj_op.meta.canceled) {
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << __LINE__ <<  dendl;
     // on success, clear the set of objects for deletion
     writer.clear_written();
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << __LINE__ <<  dendl;
   }
   if (pcanceled) {
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << __LINE__ <<  dendl;
     *pcanceled = obj_op.meta.canceled;
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << __LINE__ <<  dendl;
   }
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << __LINE__ <<  dendl;
   return 0;
 }
 

@@ -101,10 +101,12 @@ int D4NFilterDriver::get_bucket(const DoutPrefixProvider* dpp, User* u, const rg
   ldpp_dout(dpp, 20) << " AMIN: " << __func__ << " : " << __LINE__ << dendl;
   
   User* nu = nextUser(u);
+  
   ret = next->get_bucket(dpp, nu, b, &nb, y);
   if (ret != 0)
     return ret;
-
+  
+  
 /*
   rgw_placement_rule placement_rule;
   placement_rule.name = "";
@@ -119,37 +121,52 @@ int D4NFilterDriver::get_bucket(const DoutPrefixProvider* dpp, User* u, const rg
   bool existed;
   RGWEnv env;
   req_info req_info(this->cct, &env);
+  info.bucket = b;
+  info.owner = u->get_id();
   
 
   ret = nu->create_bucket(dpp, b, "", placement_rule, swift_ver_location, nullptr, policy, attrs, info, ep_objv, exclusive, obj_lock_enabled, &existed, req_info, &nb, y);
   ldpp_dout(dpp, 20) << "AMIN: " << __func__ << " return is: " << ret << dendl;
-*/
+*/ 
+  D4NFilterBucket* fb = new D4NFilterBucket(std::move(nb), u, this);
 
-  D4NFilterBucket* fb = new D4NFilterBucket(std::move(nb), nu, this);
-
- /*
-  info.bucket = b;
-  info.owner = u->get_id();
- */
   bucket_out->reset(fb);
   ldpp_dout(dpp, 20) << " AMIN: " << __func__ << " : " << __LINE__ << dendl;
 
   return 0;
 }
 
-/*
+
 int D4NFilterDriver::get_bucket(User* u, const RGWBucketInfo& i, std::unique_ptr<Bucket>* bucket)
 {
-  return this->get_bucket(this->dpp, u, i.bucket,
-				bucket, null_yield);
+  std::unique_ptr<Bucket> nb;
+  int ret;
+  User* nu = nextUser(u);
+
+  ret = next->get_bucket(nu, i, &nb);
+  if (ret != 0)
+    return ret;
+
+  Bucket* fb = new D4NFilterBucket(std::move(nb), u, this);
+  bucket->reset(fb);
+  return 0;
 }
-*/
+
 
 int D4NFilterDriver::get_bucket(const DoutPrefixProvider* dpp, User* u, const std::string& tenant, const std::string& name, std::unique_ptr<Bucket>* bucket, optional_yield y)
 {
-  return this->get_bucket(dpp, u, rgw_bucket(tenant,
-					name, ""),
-				bucket, y);
+  std::unique_ptr<Bucket> nb;
+  int ret;
+  User* nu = nextUser(u);
+
+  ret = next->get_bucket(dpp, nu, tenant, name, &nb, y);
+  if (ret != 0)
+    return ret;
+
+  Bucket* fb = new D4NFilterBucket(std::move(nb), u, this);
+  bucket->reset(fb);
+  return 0;
+
 }
 
 
@@ -1152,15 +1169,16 @@ int D4NFilterWriter::process(bufferlist&& data, uint64_t offset)
    } //end d4n_writecache
   
   else{ //data cleaning
-        ldpp_dout(save_dpp, 20) << "D4NFilter: " << __func__ << __LINE__ << ": data is: " << data.to_str()<< dendl;
+        ldpp_dout(save_dpp, 20) << "D4NFilter: " << __func__ << __LINE__ << ": data is: " << bl.to_str()<< dendl;
         ldpp_dout(save_dpp, 20) << "D4NFilter: " << __func__ << __LINE__ << ": offset is: " << offset << dendl;
      int ret = next->process(std::move(data), offset);
+        ldpp_dout(save_dpp, 20) << "D4NFilter: " << __func__ << __LINE__ << ": data is: " << bl.to_str()<< dendl;
      if (ret < 0)
      {
        ldpp_dout(save_dpp, 0) << "D4N Filter: " << __func__ << ": Writing to backend FAILED!" << dendl;
        return ret;
      }
-/* 
+ 
       if (filter->get_cache_driver()->put_async(save_dpp, oid_in_cache, bl, bl.length(), obj->get_attrs()) == 0) { //this should be oid, without D_. we keep a clean copy in the cache
 	dirty = 0;
         std::string localWeight = filter->get_policy_driver()->get_cache_policy()->update(save_dpp, oid_in_cache, ofs, bl.length(), version, dirty, lastAccessTime,  obj->get_bucket()->get_owner()->get_id(), y);
@@ -1169,7 +1187,7 @@ int D4NFilterWriter::process(bufferlist&& data, uint64_t offset)
           ldpp_dout(save_dpp, 10) << "D4N Filter:" << __func__ << "(): CacheDriver set_attr method failed." << dendl;
 	}
         
- 
+/* 
         ldpp_dout(save_dpp, 20) << "D4NFilter: " << __func__ << __LINE__ << dendl;
         ret = filter->get_cache_driver()->delete_data(save_dpp, key, y); //delete dirty data with D_
         if (ret < 0) { 
@@ -1188,8 +1206,9 @@ int D4NFilterWriter::process(bufferlist&& data, uint64_t offset)
           ldpp_dout(save_dpp, 20) << "D4N Filter: " << __func__ << ": Block directory set operation succeeded." << dendl;
         }
         ldpp_dout(save_dpp, 20) << "D4NFilter: " << __func__ << __LINE__ << dendl;
+*/
      }
-*/    
+    
      return 0;
    }
   }
@@ -1252,10 +1271,11 @@ int D4NFilterWriter::complete(size_t accounted_size, const std::string& etag,
   	ldpp_dout(save_dpp, 20) << "D4N Filter: " << __func__ << " : " << __LINE__ << " object name is: " << prefix << dendl;
 	dirty = 0;
   	filter->get_policy_driver()->get_cache_policy()->updateObj(save_dpp, prefix, version, dirty, accounted_size, lastAccessTime,  obj->get_bucket()->get_owner()->get_id(), y);
+
   	ret = next->complete(accounted_size, etag, mtime, set_mtime, attrs,
 			delete_at, if_match, if_nomatch, user_data, zones_trace,
 			canceled, rctx);
-	/*
+	
 	obj->get_obj_attrs(rctx.y, save_dpp, NULL);
 
   	// Append additional metadata to attributes 
@@ -1316,7 +1336,7 @@ int D4NFilterWriter::complete(size_t accounted_size, const std::string& etag,
   	bl.clear();
 
   	baseAttrs.insert(attrs.begin(), attrs.end());
-	*/
+	
   }
   /*
   int set_attrsReturn = driver->get_cache_driver()->set_attrs(save_dpp, obj->get_key().get_oid(), baseAttrs);

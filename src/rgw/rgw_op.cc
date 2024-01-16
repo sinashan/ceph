@@ -4153,6 +4153,8 @@ void RGWPutObj::execute(optional_yield y)
         version_id = s->object->get_instance();
       }
     }
+    ldpp_dout(this, 20) << "AMIN: " << __func__ << " : " << __LINE__ << ": owner is: " << s->bucket_owner.get_id() << dendl;
+    ldpp_dout(this, 10) << "AMIN: " << __func__ << " : "  << __LINE__ << ": obj NAME is: " << s->object.get()->get_key().get_oid() << dendl;
     processor = driver->get_atomic_writer(this, s->yield, s->object.get(),
 					 s->bucket_owner.get_id(),
 					 pdest_placement, olh_epoch, s->req_id);

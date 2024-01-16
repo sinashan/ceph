@@ -40,6 +40,19 @@ class CachePolicy {
       uint64_t size;
       time_t lastAccessTime;
       rgw_user user;
+      /*
+      const std::string& etag;
+      ceph::real_time *mtime;
+      ceph::real_time set_mtime;
+      std::map<std::string, bufferlist>& attrs;
+      ceph::real_time delete_at;
+      const char *if_match;
+      const char *if_nomatch;
+      const std::string *user_data;
+      rgw_zone_set *zones_trace;
+      bool *canceled;
+      const req_context& rctx;
+      */
       ObjEntry(std::string& key, std::string version, int dirty, uint64_t size, time_t lastAccessTime, rgw_user user) : key(key), version(version), dirty(dirty), size(size), lastAccessTime(lastAccessTime), user(user) {}
     };
 
@@ -65,11 +78,13 @@ class CachePolicy {
     CephContext* cct;
     Address addr;
     std::thread tc;
+    //rgw::sal::D4NFilterDriver *driver; 
     rgw::sal::Driver *driver; 
 
     CachePolicy() : addr() {}
     virtual ~CachePolicy() = default;
 
+    //virtual int init(CephContext *_cct, const DoutPrefixProvider* dpp, rgw::sal::D4NFilterDriver* driver) {return 0;}
     virtual int init(CephContext *_cct, const DoutPrefixProvider* dpp, rgw::sal::Driver* driver) {return 0;}
 
     int find_client(cpp_redis::client* client);
@@ -135,6 +150,7 @@ class LFUDAPolicy : public CachePolicy {
       delete dir;
     }
 
+    //virtual int init(CephContext *_cct, const DoutPrefixProvider* dpp, rgw::sal::D4NFilterDriver *_driver) override;
     virtual int init(CephContext *_cct, const DoutPrefixProvider* dpp, rgw::sal::Driver *_driver) override;
     int set_dirty(std::string key, int dirty, optional_yield y);
     int set_age(int age, const DoutPrefixProvider* dpp);
@@ -190,6 +206,7 @@ class LRUPolicy : public CachePolicy {
       std::string key;
       uint64_t size;
       ObjEntry(std::string& key, uint64_t size) : key(key), size(size) {}
+
     };
 
 
@@ -203,6 +220,7 @@ class LRUPolicy : public CachePolicy {
       delete dir;
     }
 
+    //virtual int init(CephContext *_cct, const DoutPrefixProvider* dpp, rgw::sal::D4NFilterDriver* _driver) {return 0;}
     virtual int init(CephContext *_cct, const DoutPrefixProvider* dpp, rgw::sal::Driver* _driver) {return 0;}
  
   private:

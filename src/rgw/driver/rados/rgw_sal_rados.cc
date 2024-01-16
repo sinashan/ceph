@@ -1678,6 +1678,7 @@ std::unique_ptr<Writer> RadosStore::get_atomic_writer(const DoutPrefixProvider *
 				  uint64_t olh_epoch,
 				  const std::string& unique_tag)
 {
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << "obj is: " << obj->get_key().get_oid() << dendl;
   RGWBucketInfo& bucket_info = obj->get_bucket()->get_info();
   RGWObjectCtx& obj_ctx = static_cast<RadosObject*>(obj)->get_ctx();
   auto aio = rgw::make_throttle(ctx()->_conf->rgw_put_obj_min_window_size, y);
@@ -3092,6 +3093,7 @@ int RadosAtomicWriter::prepare(optional_yield y)
 
 int RadosAtomicWriter::process(bufferlist&& data, uint64_t offset)
 {
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << "DATA is: " << data.to_str() << dendl;
   return processor.process(std::move(data), offset);
 }
 
@@ -3104,6 +3106,7 @@ int RadosAtomicWriter::complete(size_t accounted_size, const std::string& etag,
                        rgw_zone_set *zones_trace, bool *canceled,
                        const req_context& rctx)
 {
+  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : " << "size is: " << accounted_size << dendl;
   return processor.complete(accounted_size, etag, mtime, set_mtime, attrs, delete_at,
 			    if_match, if_nomatch, user_data, zones_trace, canceled, rctx);
 }

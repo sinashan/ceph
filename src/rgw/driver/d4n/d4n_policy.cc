@@ -54,7 +54,7 @@ int LFUDAPolicy::init(CephContext *_cct, const DoutPrefixProvider* dpp, rgw::sal
       
       tc = std::thread(&CachePolicy::cleaning, this, dpp);
       tc.detach();
-
+      
       return 0;
 }
 
@@ -509,28 +509,17 @@ std::string LFUDAPolicy::update(const DoutPrefixProvider* dpp, std::string& key,
  return std::to_string(localWeight);
 }
 
-
 void LFUDAPolicy::updateObj(const DoutPrefixProvider* dpp, std::string& key, std::string version, int dirty, uint64_t size, time_t lastAccessTime, const rgw_user user, optional_yield y)
 {
-  ldpp_dout(dpp, 20) << "LFUDAPolicy: " << __func__ << __LINE__ << dendl;
   //using handle_type = boost::heap::fibonacci_heap<LFUDAEntry*, boost::heap::compare<EntryComparator<LFUDAEntry>>>::handle_type;
-
-  
-        ldpp_dout(dpp, 20) << "LFUDAPolicy: " << __func__ << __LINE__ << dendl;
 
   eraseObj(dpp, key, y);
   
-        ldpp_dout(dpp, 20) << "LFUDAPolicy: " << __func__ << __LINE__ << dendl;
   const std::lock_guard l(lfuda_lock);
-        ldpp_dout(dpp, 20) << "LFUDAPolicy: " << __func__ << __LINE__ << dendl;
   LFUDAObjEntry *e = new LFUDAObjEntry(key, version, dirty, size, lastAccessTime, user);
-        ldpp_dout(dpp, 20) << "LFUDAPolicy: " << __func__ << __LINE__ << dendl;
   //handle_type handle = entries_heap.push(e);
-        ldpp_dout(dpp, 20) << "LFUDAPolicy: " << __func__ << __LINE__ << dendl;
   //e->set_handle(handle);
-        ldpp_dout(dpp, 20) << "LFUDAPolicy: " << __func__ << __LINE__ << dendl;
   o_entries_map.emplace(key, e);
-        ldpp_dout(dpp, 20) << "LFUDAPolicy: " << __func__ << __LINE__ << dendl;
 
   return;
 }
@@ -588,7 +577,7 @@ void LFUDAPolicy::cleaning(const DoutPrefixProvider* dpp)
 	name = it->first;
 	rgw_user c_rgw_user = it->second->user;
 
-    	  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : "  << __LINE__ << " User name is: " << c_rgw_user << dendl;
+    	  ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : "  << __LINE__ << " owner is: " << c_rgw_user << dendl;
 	size_t pos = 0;
 	std::string delimiter = "_";
 	while ((pos = name.find(delimiter)) != std::string::npos) {
@@ -620,9 +609,15 @@ void LFUDAPolicy::cleaning(const DoutPrefixProvider* dpp)
     	ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : "  << __LINE__ << " c_user NAME is: " << c_user->get_id() << dendl;
 	std::unique_ptr<rgw::sal::Bucket> c_bucket;
 
-        rgw_bucket c_rgw_bucket = rgw_bucket(c_rgw_user.to_str(), b_name, "");
+        rgw_bucket c_rgw_bucket = rgw_bucket(c_rgw_user.tenant, b_name, "");
 
-	int ret = driver->get_bucket(dpp, c_user.get(), c_rgw_bucket, &c_bucket, null_yield);
+	//int ret = driver->get_bucket(dpp, c_user.get(), c_rgw_bucket, &c_bucket, null_yield);
+	int ret = driver->get_bucket(dpp, nullptr, c_rgw_bucket, &c_bucket, null_yield);
+	if (ret < 0){
+    		ldpp_dout(dpp, 10) << __func__ << " : "  << __LINE__ << " cleaning get_bucket() failed for Bucket: " << b_name << dendl;
+		continue;
+	}
+
     	ldpp_dout(dpp, 10) << "AMIN: " << __func__ << " : "  << __LINE__ << " c_bucket NAME " << c_bucket->get_name() << dendl;
 
 	std::unique_ptr<rgw::sal::Object> c_obj = c_bucket->get_object(c_obj_key);
@@ -632,7 +627,7 @@ void LFUDAPolicy::cleaning(const DoutPrefixProvider* dpp)
 	std::unique_ptr<rgw::sal::Writer> processor =  driver->get_atomic_writer(dpp,
 				  null_yield,
 				  c_obj.get(),
-				  c_rgw_user,
+				  c_user->get_id(),
 				  NULL,
 				  0,
 				  "AMIN_TEST_ID");
@@ -651,7 +646,7 @@ void LFUDAPolicy::cleaning(const DoutPrefixProvider* dpp)
   	off_t fst = 0;
   	off_t ofs = 0;
 
-	/*
+	
   	rgw::sal::DataProcessor *filter = processor.get();
 	do {
            ldpp_dout(dpp, 20) << "AMIN: " << __func__ << __LINE__ << dendl;
@@ -682,7 +677,8 @@ void LFUDAPolicy::cleaning(const DoutPrefixProvider* dpp)
   	} while (len > 0);
 
   	op_ret = filter->process({}, ofs);
-	*/
+	
+	/*
     	ceph::bufferlist bl;
     	std::string oid_in_cache = prefix+"_"+std::to_string(ofs)+"_"+std::to_string(lst);  	  
     	cacheDriver->get(dpp, oid_in_cache, ofs, lst, bl, obj_attrs, null_yield);
@@ -695,15 +691,20 @@ void LFUDAPolicy::cleaning(const DoutPrefixProvider* dpp)
 	attrs[RGW_ATTR_STORAGE_CLASS] = bufferlist::static_from_string(storageClass[0]);
 
   	c_obj->set_obj_size(lst);
-        op_ret = processor->complete(lst, "", nullptr, ceph::real_time(), attrs,
+        op_ret = processor->complete(lst, it->second->etag ,it->second->mtime ,it->second->set_mtime ,obj_attrs ,it->second->delete_at ,it->second->if_match ,it->second->if_nomatch ,it->second->user_data ,it->second->zones_trace ,it->second->canceled ,rctx);
+	*/
+	
+  	const req_context rctx{dpp, null_yield, nullptr};
+        op_ret = processor->complete(lst, "", nullptr, ceph::real_time(), obj_attrs,
                                ceph::real_time(), nullptr, nullptr,
                                nullptr, nullptr, nullptr,
                                rctx);
-	//d4nDriver->set_write_to_backend(false); //set operation to cleaning
+	
+	//driver->set_write_to_backend(false); //set operation to cleaning
 
 	//data is clean now, updating in-memory metadata
 	it->second->dirty = 0;
-        //set_dirty(it->first, 0, null_yield);	
+        set_dirty(it->first, 0, null_yield);	
 
       }
     }
@@ -755,6 +756,16 @@ std::string LRUPolicy::update(const DoutPrefixProvider* dpp, std::string& key, u
   return "";
 }
 
+/*
+void LRUPolicy::updateObj(const DoutPrefixProvider* dpp, std::string& key, std::string version, int dirty, uint64_t size, time_t lastAccessTime, const rgw_user user, const std::string& etag,
+                       ceph::real_time *mtime, ceph::real_time set_mtime,
+                       std::map<std::string, bufferlist>& attrs,
+                       ceph::real_time delete_at,
+                       const char *if_match, const char *if_nomatch,
+                       const std::string *user_data,
+                       rgw_zone_set *zones_trace, bool *canceled,
+                       const req_context& rctx, optional_yield y)
+*/
 void LRUPolicy::updateObj(const DoutPrefixProvider* dpp, std::string& key, std::string version, int dirty, uint64_t size, time_t lastAccessTime, const rgw_user user, optional_yield y)
 {
   eraseObj(dpp, key, y);

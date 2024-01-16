@@ -57,7 +57,7 @@ class D4NFilterDriver : public FilterDriver {
     virtual std::unique_ptr<User> get_user(const rgw_user& u) override;
 
     virtual int get_bucket(const DoutPrefixProvider* dpp, User* u, const rgw_bucket& b, std::unique_ptr<Bucket>* bucket_out, optional_yield y) override;
-    //virtual int get_bucket(User* u, const RGWBucketInfo& i, std::unique_ptr<Bucket>* bucket) override;
+    virtual int get_bucket(User* u, const RGWBucketInfo& i, std::unique_ptr<Bucket>* bucket) override;
     virtual int get_bucket(const DoutPrefixProvider* dpp, User* u, const std::string& tenant, const std::string& name, std::unique_ptr<Bucket>* bucket, optional_yield y) override;
 
     virtual std::unique_ptr<Object> get_object(const rgw_obj_key& k) override;
