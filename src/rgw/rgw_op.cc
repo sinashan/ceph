@@ -4153,8 +4153,6 @@ void RGWPutObj::execute(optional_yield y)
         version_id = s->object->get_instance();
       }
     }
-    ldpp_dout(this, 20) << "AMIN: " << __func__ << " : " << __LINE__ << ": owner is: " << s->bucket_owner.get_id() << dendl;
-    ldpp_dout(this, 10) << "AMIN: " << __func__ << " : "  << __LINE__ << ": obj NAME is: " << s->object.get()->get_key().get_oid() << dendl;
     processor = driver->get_atomic_writer(this, s->yield, s->object.get(),
 					 s->bucket_owner.get_id(),
 					 pdest_placement, olh_epoch, s->req_id);
@@ -4261,18 +4259,13 @@ void RGWPutObj::execute(optional_yield y)
   }
   tracepoint(rgw_op, before_data_transfer, s->req_id.c_str());
   do {
-  ldpp_dout(this, 20) << "AMIN: " << __func__ << ": " << __LINE__ << ": fst is: " << fst << dendl;
-  ldpp_dout(this, 20) << "AMIN: " << __func__ << ": " << __LINE__ << ": lst is: " << lst << dendl;
     bufferlist data;
     if (fst > lst){
-  ldpp_dout(this, 20) << "AMIN: " << __func__ << ": " << __LINE__ << ": fst is: " << fst << dendl;
       break;
     }
     if (copy_source.empty()) {
-  ldpp_dout(this, 20) << "AMIN: " << __func__ << ": " << __LINE__ << ": fst is: " << fst << dendl;
       len = get_data(data);
     } else {
-  ldpp_dout(this, 20) << "AMIN: " << __func__ << ": " << __LINE__ << ": fst is: " << fst << dendl;
       off_t cur_lst = min<off_t>(fst + s->cct->_conf->rgw_max_chunk_size - 1, lst);
       op_ret = get_data(fst, cur_lst, data);
       if (op_ret < 0)
@@ -4293,9 +4286,6 @@ void RGWPutObj::execute(optional_yield y)
       hash.Update((const unsigned char *)data.c_str(), data.length());
     }
 
-  ldpp_dout(this, 20) << "AMIN: " << __func__ << ": fst is: " << fst << dendl;
-  ldpp_dout(this, 20) << "AMIN: " << __func__ << ": lst is: " << lst << dendl;
-  ldpp_dout(this, 20) << "AMIN: " << __func__ << ": ofs is: " << ofs << dendl;
     op_ret = filter->process(std::move(data), ofs);
     if (op_ret < 0) {
       ldpp_dout(this, 20) << "processor->process() returned ret="
@@ -4422,10 +4412,6 @@ void RGWPutObj::execute(optional_yield y)
     emplace_attr(RGW_ATTR_OBJECT_RETENTION, std::move(obj_retention_bl));
   }
 
-  ldpp_dout(this, 20) << "AMIN: " << __func__ << ": size is: " << s->obj_size << dendl;
-  ldpp_dout(this, 20) << "AMIN: " << __func__ << ": etag is: " << etag << dendl;
-  ldpp_dout(this, 20) << "AMIN: " << __func__ << ": delete_at: " << delete_at << dendl;
-  ldpp_dout(this, 20) << "AMIN: " << __func__ << ": size is: " << s->obj_size << dendl;
   tracepoint(rgw_op, processor_complete_enter, s->req_id.c_str());
   const req_context rctx{this, s->yield, s->trace.get()};
   op_ret = processor->complete(s->obj_size, etag, &mtime, real_time(), attrs,

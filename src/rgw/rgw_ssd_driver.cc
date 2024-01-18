@@ -171,12 +171,6 @@ int SSDDriver::get(const DoutPrefixProvider* dpp, const std::string& key, off_t 
     std::string tmp_s(buffer);
     bl.append(buffer, sizeof(buffer));
     //ceph::encode(buffer.to_str(), bl);
-    ldpp_dout(dpp, 0) << "AMIN: " << __func__ << " : " << __LINE__ << "buffer is: " << buffer << dendl;
-    ldpp_dout(dpp, 0) << "AMIN: " << __func__ << " : " << __LINE__ << "buffer len is: " << sizeof(buffer) << dendl;
-    ldpp_dout(dpp, 0) << "AMIN: " << __func__ << " : " << __LINE__ << "tmp_s is: " << tmp_s << dendl;
-    ldpp_dout(dpp, 0) << "AMIN: " << __func__ << " : " << __LINE__ << "tmp_s len is: " << tmp_s.length() << dendl;
-    ldpp_dout(dpp, 0) << "AMIN: " << __func__ << " : " << __LINE__ << "bl is: " << bl.to_str() << dendl;
-    ldpp_dout(dpp, 0) << "AMIN: " << __func__ << " : " << __LINE__ << "bl len is: " << bl.length() << dendl;
 
     if (attrs.size() > 0) {
         r = get_attrs(dpp, key, attrs, y);
