@@ -904,16 +904,6 @@ int D4NFilterWriter::prepare(optional_yield y)
 
 int D4NFilterWriter::process(bufferlist&& data, uint64_t offset)
 {
-  /*
-  int append_dataReturn = driver->get_cache_driver()->append_data(save_dpp, obj->get_key().get_oid(), 
-  								    data, y);
-
-  if (append_dataReturn < 0) {
-    ldpp_dout(save_dpp, 20) << "D4N Filter: Cache append data operation failed." << dendl;
-  } else {
-    ldpp_dout(save_dpp, 20) << "D4N Filter: Cache append data operation succeeded." << dendl;
-  }*/
-
   return next->process(std::move(data), offset);
 }
 
