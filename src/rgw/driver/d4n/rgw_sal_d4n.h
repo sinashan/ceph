@@ -31,6 +31,7 @@
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/detached.hpp>
 #include <boost/redis/connection.hpp>
+#include <chrono>
 
 namespace rgw::d4n {
   class PolicyDriver;
@@ -220,6 +221,7 @@ class D4NFilterWriter : public FilterWriter {
     const DoutPrefixProvider* save_dpp;
     bool atomic;
     optional_yield y;
+    bool d4n_writecache;
 
   public:
     D4NFilterWriter(std::unique_ptr<Writer> _next, D4NFilterDriver* _driver, Object* _obj, 

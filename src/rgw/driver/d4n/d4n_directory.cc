@@ -680,4 +680,52 @@ int BlockDirectory::remove_host(CacheBlock* block, std::string delValue, optiona
   }
 }
 
+int BlockDirectory::get_field(CacheBlock* block,  std::string field, std::string value, optional_yield y)
+{
+  std::string key = build_index(block);
+
+  if (exist_key(block, y)) {
+    try {
+      /* Ensure field exists */
+      {
+	boost::system::error_code ec;
+	request req;
+	req.push("HEXISTS", key, field);
+	response<int> resp;
+
+	redis_exec(conn, ec, req, resp, y);
+
+	if (!std::get<0>(resp).value()) {
+	  return -ENOENT;
+	} else if (ec) {
+	  return -ec.value();
+	}
+      }
+
+      {
+	boost::system::error_code ec;
+	request req;
+	req.push("HGET", key, field);
+	response<std::string> resp;
+
+	redis_exec(conn, ec, req, resp, y);
+
+	if (std::get<0>(resp).value().empty()) {
+	  return -ENOENT;
+	} else if (ec) {
+	  return -ec.value();
+	}
+
+	value = std::get<0>(resp).value();
+      }
+
+    } catch (std::exception &e) {
+      return -EINVAL;
+    }
+  } else {
+    return -ENOENT;
+  }
+}
+
+
 } } // namespace rgw::d4n

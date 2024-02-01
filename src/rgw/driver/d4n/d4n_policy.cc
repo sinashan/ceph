@@ -42,6 +42,15 @@ void redis_exec(std::shared_ptr<connection> conn, boost::system::error_code& ec,
     async_exec(std::move(conn), req, resp, ceph::async::use_blocked[ec]);
   }
 }
+ 
+void LFUDAPolicy::init(CephContext *_cct, const DoutPrefixProvider* dpp, rgw::sal::Driver *_driver) {
+    cct = _cct;
+    dir->init(cct);
+    driver = _driver;
+
+    tc = std::thread(&CachePolicy::cleaning, this, dpp);
+    tc.detach();
+}
 
 int LFUDAPolicy::set_age(int age, optional_yield y) {
   try {
@@ -144,7 +153,7 @@ int LFUDAPolicy::get_local_weight_sum(optional_yield y) {
 
   if (!std::get<0>(resp).value()) {
     int sum = 0;
-    for (auto& entry : entries_map)
+    for (auto& entry : b_entries_map)
       sum += entry.second->localWeight; 
  
     if (int ret = set_local_weight_sum(sum, y) < 0) { /* Initialize */ 
@@ -196,7 +205,7 @@ CacheBlock* LFUDAPolicy::get_victim_block(const DoutPrefixProvider* dpp, optiona
 
 int LFUDAPolicy::exist_key(std::string key) {
   const std::lock_guard l(lfuda_lock);
-  if (entries_map.count(key) != 0) {
+  if (b_entries_map.count(key) != 0) {
     return true;
   }
 
@@ -258,8 +267,8 @@ int LFUDAPolicy::eviction(const DoutPrefixProvider* dpp, uint64_t size, optional
 
     const std::lock_guard l(lfuda_lock);
     std::string key = entries_heap.top()->key;
-    auto it = entries_map.find(key);
-    if (it == entries_map.end()) {
+    auto it = b_entries_map.find(key);
+    if (it == b_entries_map.end()) {
       delete victim;
       return -ENOENT;
     }
@@ -270,7 +279,7 @@ int LFUDAPolicy::eviction(const DoutPrefixProvider* dpp, uint64_t size, optional
       return avgWeight;
     }
 
-    avgWeight /= entries_map.size();
+    avgWeight /= b_entries_map.size();
 
     if (victim->hostsList.size() == 1 && victim->hostsList[0] == dir->cct->_conf->rgw_local_cache_address) { /* Last copy */
       if (victim->globalWeight) {
@@ -314,7 +323,7 @@ int LFUDAPolicy::eviction(const DoutPrefixProvider* dpp, uint64_t size, optional
 
     ldpp_dout(dpp, 10) << "LFUDAPolicy::" << __func__ << "(): Block " << key << " has been evicted." << dendl;
 
-    int weight = (avgWeight * entries_map.size()) - it->second->localWeight;
+    int weight = (avgWeight * b_entries_map.size()) - it->second->localWeight;
     if (int ret = set_local_weight_sum(weight, y) < 0)
       return ret;
 
@@ -330,7 +339,7 @@ int LFUDAPolicy::eviction(const DoutPrefixProvider* dpp, uint64_t size, optional
   return 0;
 }
 
-void LFUDAPolicy::update(const DoutPrefixProvider* dpp, std::string& key, uint64_t offset, uint64_t len, std::string version, optional_yield y)
+void LFUDAPolicy::update(const DoutPrefixProvider* dpp, std::string& key, uint64_t offset, uint64_t len, std::string version, bool dirty, std::string creationTime, const rgw_user user, optional_yield y)
 {
   using handle_type = boost::heap::fibonacci_heap<LFUDAEntry*, boost::heap::compare<EntryComparator<LFUDAEntry>>>::handle_type;
   const std::lock_guard l(lfuda_lock);
@@ -349,10 +358,10 @@ void LFUDAPolicy::update(const DoutPrefixProvider* dpp, std::string& key, uint64
 
   erase(dpp, key, y);
   
-  LFUDAEntry *e = new LFUDAEntry(key, offset, len, version, localWeight);
+  LFUDAEntry *e = new LFUDAEntry(key, offset, len, version, dirty, creationTime, user, localWeight);
   handle_type handle = entries_heap.push(e);
   e->set_handle(handle);
-  entries_map.emplace(key, e);
+  b_entries_map.emplace(key, e);
 
   if (cacheDriver->set_attr(dpp, key, "user.rgw.localWeight", std::to_string(localWeight), y) < 0) 
     ldpp_dout(dpp, 10) << "LFUDAPolicy::" << __func__ << "(): CacheDriver set_attr method failed." << dendl;
@@ -368,10 +377,20 @@ void LFUDAPolicy::update(const DoutPrefixProvider* dpp, std::string& key, uint64
     ldpp_dout(dpp, 10) << "LFUDAPolicy::" << __func__ << "(): Failed to update sum of local weights for the cache backend." << dendl;
 }
 
+void LFUDAPolicy::updateObj(const DoutPrefixProvider* dpp, std::string& key, std::string version, bool dirty, uint64_t size, std::string creationTime, const rgw_user user, optional_yield y)
+{
+  eraseObj(dpp, key, y);
+  
+  const std::lock_guard l(lfuda_lock);
+  LFUDAObjEntry *e = new LFUDAObjEntry(key, version, dirty, size, creationTime, user);
+  o_entries_map.emplace(key, e);
+}
+
+
 bool LFUDAPolicy::erase(const DoutPrefixProvider* dpp, const std::string& key, optional_yield y)
 {
-  auto p = entries_map.find(key);
-  if (p == entries_map.end()) {
+  auto p = b_entries_map.find(key);
+  if (p == b_entries_map.end()) {
     return false;
   }
 
@@ -388,15 +407,167 @@ bool LFUDAPolicy::erase(const DoutPrefixProvider* dpp, const std::string& key, o
   }
 
   entries_heap.erase(p->second->handle);
-  entries_map.erase(p);
+  b_entries_map.erase(p);
 
   return true;
+}
+
+bool LFUDAPolicy::eraseObj(const DoutPrefixProvider* dpp, const std::string& key, optional_yield y)
+{
+  const std::lock_guard l(lfuda_lock);
+  auto p = o_entries_map.find(key);
+  if (p == o_entries_map.end()) {
+    return false;
+  }
+
+  o_entries_map.erase(p);
+
+  return true;
+}
+
+void LFUDAPolicy::cleaning(const DoutPrefixProvider* dpp)
+{
+  const int interval = cct->_conf->rgw_d4n_cache_cleaning_interval;
+  while(true){
+    ldpp_dout(dpp, 20) << __func__ << " : " << " Cache cleaning!" << dendl;
+    std::string name = ""; 
+    std::string b_name = ""; 
+    std::string key = ""; 
+    uint64_t len = 0;
+    rgw::sal::Attrs obj_attrs;
+    int count = 0;
+
+    for (auto it = o_entries_map.begin(); it != o_entries_map.end(); it++){
+      //if ((it->second->dirty == true) && (std::difftime(time(NULL), it->second->creationTime) > interval)){ //if block is dirty and written more than interval seconds ago
+      if ((it->second->dirty == true) && (std::difftime(time(NULL), stol(it->second->creationTime)) > interval)){ //if block is dirty and written more than interval seconds ago
+	name = it->first;
+	rgw_user c_rgw_user = it->second->user;
+
+	size_t pos = 0;
+	std::string delimiter = "_";
+	while ((pos = name.find(delimiter)) != std::string::npos) {
+	  if (count == 0){
+	    b_name = name.substr(0, pos);
+    	    name.erase(0, pos + delimiter.length());
+	  }
+	  count ++;
+	}
+	key = name;
+
+	//writing data to the backend
+	//we need to create an atomic_writer
+ 	rgw_obj_key c_obj_key = rgw_obj_key(key); 		
+	std::unique_ptr<rgw::sal::User> c_user = driver->get_user(c_rgw_user);
+
+	std::unique_ptr<rgw::sal::Bucket> c_bucket;
+        rgw_bucket c_rgw_bucket = rgw_bucket(c_rgw_user.tenant, b_name, "");
+
+	RGWBucketInfo c_bucketinfo;
+	c_bucketinfo.bucket = c_rgw_bucket;
+	c_bucketinfo.owner = c_rgw_user;
+	
+	/*
+    	ret = driver->load_bucket(dpp, c_rgw_bucket, &c_bucket, null_yield);
+	if (ret < 0) {
+      	  ldpp_dout(dpp, 10) << __func__ << "(): load_bucket() returned ret=" << ret << dendl;
+      	  if (ret == -ENOENT) {
+            ret = -ERR_NO_SUCH_BUCKET;
+      	  }
+      	  return ret;
+        }
+    	c_bucketinfo = bucket->get_info();
+	*/
+	c_bucket = driver->get_bucket(c_bucketinfo);
+
+	/*
+ 	int ret = driver->get_bucket(dpp, nullptr, c_rgw_bucket, &c_bucket, null_yield);
+	if (ret < 0){
+    		ldpp_dout(dpp, 10) << __func__ << " : "  << __LINE__ << " cleaning get_bucket() failed for Bucket: " << b_name << dendl;
+		continue;
+	}
+	*/
+
+	std::unique_ptr<rgw::sal::Object> c_obj = c_bucket->get_object(c_obj_key);
+
+	std::unique_ptr<rgw::sal::Writer> processor =  driver->get_atomic_writer(dpp,
+				  null_yield,
+				  c_obj.get(),
+				  c_user->get_id(),
+				  NULL,
+				  0,
+				  "");
+
+  	int op_ret = processor->prepare(null_yield);
+  	if (op_ret < 0) {
+    	  ldpp_dout(dpp, 20) << "processor->prepare() returned ret=" << op_ret << dendl;
+    	  break;
+  	}
+
+	std::string prefix = "D_"+b_name+"_"+key;
+	off_t lst = it->second->size;
+  	off_t fst = 0;
+  	off_t ofs = 0;
+
+	
+  	rgw::sal::DataProcessor *filter = processor.get();
+	do {
+    	  ceph::bufferlist data;
+    	  if (fst >= lst){
+      	    break;
+    	  }
+    	  off_t cur_lst = std::min<off_t>(fst + cct->_conf->rgw_max_chunk_size, lst);
+    	  std::string oid_in_cache = prefix+"_"+std::to_string(fst)+"_"+std::to_string(cur_lst);  	  
+    	  cacheDriver->get(dpp, oid_in_cache, fst, cur_lst, data, obj_attrs, null_yield);
+    	  len = data.length();
+    	  fst += len;
+
+    	  if (len == 0) {
+      	    break;
+   	  }
+
+    	  op_ret = filter->process(std::move(data), ofs);
+    	  if (op_ret < 0) {
+      	    ldpp_dout(dpp, 20) << "processor->process() returned ret="
+          	<< op_ret << dendl;
+      	    return;
+    	  }
+
+  	  rgw::d4n::CacheBlock block;
+    	  block.cacheObj.bucketName = c_obj->get_bucket()->get_name();
+    	  block.cacheObj.objName = c_obj->get_key().get_oid();
+      	  block.size = len;
+     	  block.blockID = ofs;
+	  op_ret = dir->update_field(&block, "dirty", "dirty", null_yield); 
+    	  if (op_ret < 0) {
+      	    ldpp_dout(dpp, 20) << "updating dirty flag in Block directory failed!" << dendl;
+      	    return;
+    	  }
+
+    	  ofs += len;
+  	} while (len > 0);
+
+  	op_ret = filter->process({}, ofs);
+	
+  	const req_context rctx{dpp, null_yield, nullptr};
+        op_ret = processor->complete(lst, "", nullptr, ceph::real_time(), obj_attrs,
+                               ceph::real_time(), nullptr, nullptr,
+                               nullptr, nullptr, nullptr,
+                               rctx, 0);
+
+	//data is clean now, updating in-memory metadata
+	it->second->dirty = false;
+        //FIXME: AMIN:  should we update Object	Directory too?
+      }
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(interval));
+  }
 }
 
 int LRUPolicy::exist_key(std::string key)
 {
   const std::lock_guard l(lru_lock);
-  if (entries_map.count(key) != 0) {
+  if (b_entries_map.count(key) != 0) {
       return true;
     }
     return false;
@@ -409,7 +580,7 @@ int LRUPolicy::eviction(const DoutPrefixProvider* dpp, uint64_t size, optional_y
 
   while (freeSpace < size) {
     auto p = entries_lru_list.front();
-    entries_map.erase(entries_map.find(p.key));
+    b_entries_map.erase(b_entries_map.find(p.key));
     entries_lru_list.pop_front_and_dispose(Entry_delete_disposer());
     auto ret = cacheDriver->delete_data(dpp, p.key, y);
     if (ret < 0) {
@@ -423,13 +594,22 @@ int LRUPolicy::eviction(const DoutPrefixProvider* dpp, uint64_t size, optional_y
   return 0;
 }
 
-void LRUPolicy::update(const DoutPrefixProvider* dpp, std::string& key, uint64_t offset, uint64_t len, std::string version, optional_yield y)
+void LRUPolicy::update(const DoutPrefixProvider* dpp, std::string& key, uint64_t offset, uint64_t len, std::string version, bool dirty, std::string creationTime, const rgw_user user, optional_yield y)
 {
   const std::lock_guard l(lru_lock);
   _erase(dpp, key, y);
-  Entry *e = new Entry(key, offset, len, version);
+  Entry *e = new Entry(key, offset, len, version, dirty, creationTime, user);
   entries_lru_list.push_back(*e);
-  entries_map.emplace(key, e);
+  b_entries_map.emplace(key, e);
+}
+
+void LRUPolicy::updateObj(const DoutPrefixProvider* dpp, std::string& key, std::string version, bool dirty, uint64_t size, std::string creationTime, const rgw_user user, optional_yield y)
+{
+  eraseObj(dpp, key, y);
+  const std::lock_guard l(lru_lock);
+  ObjEntry *e = new ObjEntry(key, version, dirty, size, creationTime, user);
+  o_entries_map.emplace(key, e);
+  return;
 }
 
 bool LRUPolicy::erase(const DoutPrefixProvider* dpp, const std::string& key, optional_yield y)
@@ -440,12 +620,23 @@ bool LRUPolicy::erase(const DoutPrefixProvider* dpp, const std::string& key, opt
 
 bool LRUPolicy::_erase(const DoutPrefixProvider* dpp, const std::string& key, optional_yield y)
 {
-  auto p = entries_map.find(key);
-  if (p == entries_map.end()) {
+  auto p = b_entries_map.find(key);
+  if (p == b_entries_map.end()) {
     return false;
   }
-  entries_map.erase(p);
+  b_entries_map.erase(p);
   entries_lru_list.erase_and_dispose(entries_lru_list.iterator_to(*(p->second)), Entry_delete_disposer());
+  return true;
+}
+
+bool LRUPolicy::eraseObj(const DoutPrefixProvider* dpp, const std::string& key, optional_yield y)
+{
+  const std::lock_guard l(lru_lock);
+  auto p = o_entries_map.find(key);
+  if (p == o_entries_map.end()) {
+    return false;
+  }
+  o_entries_map.erase(p);
   return true;
 }
 

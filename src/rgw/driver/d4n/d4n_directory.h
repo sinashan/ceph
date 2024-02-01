@@ -27,6 +27,7 @@ struct CacheBlock {
   uint64_t blockID;
   std::string version;
   uint64_t size; /* Block size in bytes */
+  bool dirty;
   int globalWeight = 0; /* LFUDA policy variable */
   std::vector<std::string> hostsList; /* List of hostnames <ip:port> of block locations */
 };
@@ -74,6 +75,7 @@ class BlockDirectory: public Directory {
     int del(CacheBlock* block, optional_yield y);
     int update_field(CacheBlock* block, std::string field, std::string value, optional_yield y);
     int remove_host(CacheBlock* block, std::string value, optional_yield y);
+    int get_field(CacheBlock* block, std::string field, std::string value, optional_yield y);
 
   private:
     std::shared_ptr<connection> conn;
