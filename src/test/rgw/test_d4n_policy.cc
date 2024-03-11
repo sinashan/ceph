@@ -106,7 +106,7 @@ class LFUDAPolicyFixture : public ::testing::Test {
       std::string oid = build_index(block->cacheObj.bucketName, block->cacheObj.objName, block->blockID, block->size);
 
       if (this->policyDriver->get_cache_policy()->exist_key(build_index(block->cacheObj.bucketName, block->cacheObj.objName, block->blockID, block->size))) { /* Local copy */
-	policyDriver->get_cache_policy()->update(env->dpp, oid, 0, bl.length(), "", y);
+	policyDriver->get_cache_policy()->update(env->dpp, oid, 0, bl.length(), "", false, time(NULL), user, y);
         return 0;
       } else {
 	if (this->policyDriver->get_cache_policy()->eviction(dpp, block->size, y) < 0)
@@ -134,7 +134,7 @@ class LFUDAPolicyFixture : public ::testing::Test {
 	  if (dir->set(block, y) < 0)
 	    return -1;
 
-	  this->policyDriver->get_cache_policy()->update(dpp, oid, 0, bl.length(), "", y);
+	  this->policyDriver->get_cache_policy()->update(dpp, oid, 0, bl.length(), "", false, time(NULL), user, y);
 	  if (cacheDriver->put(dpp, oid, bl, bl.length(), attrs, y) < 0)
             return -1;
 	  return cacheDriver->set_attr(dpp, oid, "localWeight", std::to_string(age), y);
@@ -148,6 +148,8 @@ class LFUDAPolicyFixture : public ::testing::Test {
     rgw::d4n::BlockDirectory* dir;
     rgw::d4n::PolicyDriver* policyDriver;
     rgw::cache::RedisDriver* cacheDriver;
+    rgw::sal::D4NFilterDriver* driver = nullptr;
+    rgw_user user;
 
     net::io_context io;
     std::shared_ptr<connection> conn;
@@ -161,7 +163,7 @@ TEST_F(LFUDAPolicyFixture, LocalGetBlockYield)
   spawn::spawn(io, [this] (spawn::yield_context yield) {
     std::string key = block->cacheObj.bucketName + "_" + block->cacheObj.objName + "_" + std::to_string(block->blockID) + "_" + std::to_string(block->size);
     ASSERT_EQ(0, cacheDriver->put(env->dpp, key, bl, bl.length(), attrs, optional_yield{io, yield}));
-    policyDriver->get_cache_policy()->update(env->dpp, key, 0, bl.length(), "", optional_yield{io, yield});
+    policyDriver->get_cache_policy()->update(env->dpp, key, 0, bl.length(), "", false, time(NULL), user, optional_yield{io, yield});
 
     ASSERT_EQ(lfuda(env->dpp, block, cacheDriver, optional_yield{io, yield}), 0);
 
@@ -213,7 +215,7 @@ TEST_F(LFUDAPolicyFixture, RemoteGetBlockYield)
     ASSERT_EQ(0, dir->set(&victim, optional_yield{io, yield}));
     std::string victimKey = victim.cacheObj.bucketName + "_" + victim.cacheObj.objName + "_" + std::to_string(victim.blockID) + "_" + std::to_string(victim.size);
     ASSERT_EQ(0, cacheDriver->put(env->dpp, victimKey, bl, bl.length(), attrs, optional_yield{io, yield}));
-    policyDriver->get_cache_policy()->update(env->dpp, victimKey, 0, bl.length(), "", optional_yield{io, yield});
+    policyDriver->get_cache_policy()->update(env->dpp, victimKey, 0, bl.length(), "", false, time(NULL), user, optional_yield{io, yield});
 
     /* Remote block */
     block->size = cacheDriver->get_free_space(env->dpp) + 1; /* To trigger eviction */
@@ -277,7 +279,7 @@ TEST_F(LFUDAPolicyFixture, RedisSyncTest)
   spawn::spawn(io, [this] (spawn::yield_context yield) {
     env->cct->_conf->rgw_lfuda_sync_frequency = 1;
     dynamic_cast<rgw::d4n::LFUDAPolicy*>(policyDriver->get_cache_policy())->save_y(optional_yield{io, yield});
-    policyDriver->get_cache_policy()->init(env->cct, env->dpp, io);
+    policyDriver->get_cache_policy()->init(env->cct, env->dpp, io, driver);
   
     cacheDriver->shutdown();
 

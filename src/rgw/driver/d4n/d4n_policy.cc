@@ -47,8 +47,7 @@ void redis_exec(std::shared_ptr<connection> conn,
   }
 }
 
-int LFUDAPolicy::init(CephContext *cct, const DoutPrefixProvider* dpp, asio::io_context& io_context) {
-  cct = _cct;
+int LFUDAPolicy::init(CephContext *cct, const DoutPrefixProvider* dpp, asio::io_context& io_context, rgw::sal::Driver *_driver) {
   dir->init(cct);
   driver = _driver;
   int result = 0;
@@ -60,7 +59,7 @@ int LFUDAPolicy::init(CephContext *cct, const DoutPrefixProvider* dpp, asio::io_
     req.push("HEXISTS", "lfuda", "age"); 
     req.push("HSET", "lfuda", "minLocalWeights_sum", std::to_string(weightSum)); /* New cache node will always have the minimum average weight */
     req.push("HSET", "lfuda", "minLocalWeights_size", std::to_string(entries_map.size()));
-    req.push("HSET", "lfuda", "minLocalWeights_address", dir->cct->_conf->rgw_local_cache_address);
+    req.push("HSET", "lfuda", "minLocalWeights_address", dpp->get_cct()->_conf->rgw_local_cache_address);
   
     redis_exec(conn, ec, req, resp, y);
 
@@ -176,7 +175,7 @@ int LFUDAPolicy::local_weight_sync(const DoutPrefixProvider* dpp, optional_yield
 	response<int, int, int> value;
 	req.push("HSET", "lfuda", "minLocalWeights_sum", std::to_string(weightSum));
 	req.push("HSET", "lfuda", "minLocalWeights_size", std::to_string(entries_map.size()));
-	req.push("HSET", "lfuda", "minLocalWeights_address", dir->cct->_conf->rgw_local_cache_address);
+	req.push("HSET", "lfuda", "minLocalWeights_address", dpp->get_cct()->_conf->rgw_local_cache_address);
 	redis_exec(conn, ec, req, resp, y);
 
 	if (ec) {
@@ -298,7 +297,7 @@ int LFUDAPolicy::eviction(const DoutPrefixProvider* dpp, uint64_t size, optional
 
     int avgWeight = weightSum / entries_map.size();
 
-    if (victim->hostsList.size() == 1 && victim->hostsList[0] == dir->cct->_conf->rgw_local_cache_address) { /* Last copy */
+    if (victim->hostsList.size() == 1 && victim->hostsList[0] == dpp->get_cct()->_conf->rgw_local_cache_address) { /* Last copy */
       if (victim->globalWeight) {
 	it->second->localWeight += victim->globalWeight;
         (*it->second->handle)->localWeight = it->second->localWeight;
@@ -328,7 +327,7 @@ int LFUDAPolicy::eviction(const DoutPrefixProvider* dpp, uint64_t size, optional
       return ret;
     }
 
-    if (int ret = dir->remove_host(victim, dir->cct->_conf->rgw_local_cache_address, y) < 0) {
+    if (int ret = dir->remove_host(victim, dpp->get_cct()->_conf->rgw_local_cache_address, y) < 0) {
       delete victim;
       return ret;
     }
@@ -418,7 +417,7 @@ bool LFUDAPolicy::eraseObj(const DoutPrefixProvider* dpp, const std::string& key
 
 void LFUDAPolicy::cleaning(const DoutPrefixProvider* dpp)
 {
-  const int interval = cct->_conf->rgw_d4n_cache_cleaning_interval;
+  const int interval = dpp->get_cct()->_conf->rgw_d4n_cache_cleaning_interval;
   while(true){
     ldpp_dout(dpp, 20) << __func__ << " : " << " Cache cleaning!" << dendl;
     std::string name = ""; 
@@ -491,7 +490,7 @@ void LFUDAPolicy::cleaning(const DoutPrefixProvider* dpp)
     	  if (fst >= lst){
       	    break;
     	  }
-    	  off_t cur_size = std::min<off_t>(fst + cct->_conf->rgw_max_chunk_size, lst);
+    	  off_t cur_size = std::min<off_t>(fst + dpp->get_cct()->_conf->rgw_max_chunk_size, lst);
 	  off_t cur_len = cur_size - fst;
     	  std::string oid_in_cache = "D_" + prefix + "_" + std::to_string(fst) + "_" + std::to_string(cur_len);
     	  std::string new_oid_in_cache = prefix + "_" + std::to_string(fst) + "_" + std::to_string(cur_len);
