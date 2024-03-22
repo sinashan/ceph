@@ -39,6 +39,7 @@
 #include "rgw_rest_usage.h"
 #include "rgw_rest_bucket.h"
 #include "rgw_rest_metadata.h"
+#include "rgw_rest_remoted4n.h"
 #include "rgw_rest_log.h"
 #include "rgw_rest_config.h"
 #include "rgw_rest_realm.h"
