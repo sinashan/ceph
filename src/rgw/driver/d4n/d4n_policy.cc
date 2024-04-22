@@ -670,15 +670,18 @@ void LFUDAPolicy::cleaning(const DoutPrefixProvider* dpp)
 	  op_ret = dir->update_field(&block, "dirty", "false", null_yield); 
     	  if (op_ret < 0) {
       	    ldpp_dout(dpp, 20) << "updating dirty flag in Block directory failed!" << dendl;
-      	    //return;  //FIXME: AMIN: uncomment, testing for remoteD4N
+      	    return;
     	  }
   ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << ": data is: " << dataCP.to_str() << dendl;
 
-	  //FIXME: AMIN: this is for testing. Remove it afterwards.
+	  //FIXME: AMIN: this is for testing remote cache.
+	  //comment or remove it afterwards
+	  /*
 	  std::string  remoteCacheAddress = dpp->get_cct()->_conf->rgw_remote_cache_address;
 	  if (int ret = sendRemote(dpp, &block, remoteCacheAddress, oid_in_cache, &dataCP, y) < 0){
       	    ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << ": sendRemote returned ret=" << ret << dendl;
 	  }
+	  */
 	  
   ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
 

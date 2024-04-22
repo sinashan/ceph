@@ -3926,21 +3926,11 @@ options:
   default: true
   services:
   - rgw
-- name: rgw_d4n_host
+- name: rgw_filter_address
   type: str
   level: advanced
-  desc: The rgw directory host
-  default: 127.0.0.1
-  services: 
-  - rgw
-  flags:
-  - startup
-  with_legacy: true
-- name: rgw_d4n_port
-  type: int
-  level: advanced
-  desc: The rgw directory port
-  default: 6379
+  desc: The address of redis server for the d4n directory
+  default: 127.0.0.1:6379
   services: 
   - rgw
   flags:
