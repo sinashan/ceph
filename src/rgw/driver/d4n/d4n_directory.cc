@@ -102,6 +102,11 @@ int ObjectDirectory::set(CacheObj* object, optional_yield y)
 
   redisValues.push_back(endpoint); 
 
+  for (auto& it : object->attrs) {
+    redisValues.push_back(it.first);
+    redisValues.push_back(it.second.to_str());
+  }
+
   try {
     boost::system::error_code ec;
     request req;
@@ -120,6 +125,9 @@ int ObjectDirectory::set(CacheObj* object, optional_yield y)
   return 0;
 }
 
+//FIXME: since we will keep ATTRs in the directory,
+//we need to change HMGET method to HGETALL and traverse it.
+//for now, our assumption is to keep only ACL in the directory
 int ObjectDirectory::get(CacheObj* object, optional_yield y) 
 {
   std::string key = build_index(object);
@@ -132,6 +140,8 @@ int ObjectDirectory::get(CacheObj* object, optional_yield y)
     fields.push_back("creationTime");
     fields.push_back("dirty");
     fields.push_back("objHosts");
+    fields.push_back("version");
+    fields.push_back(RGW_ATTR_ACL);
 
     try {
       boost::system::error_code ec;
@@ -161,6 +171,10 @@ int ObjectDirectory::get(CacheObj* object, optional_yield y)
 	  object->hostsList.push_back(host);
 	}
       }
+
+      object->version = std::get<0>(resp).value()[5];
+      object->attrs[RGW_ATTR_ACL] = buffer::list::static_from_string(std::get<0>(resp).value()[6]);
+
     } catch (std::exception &e) {
       return -EINVAL;
     }
@@ -168,6 +182,43 @@ int ObjectDirectory::get(CacheObj* object, optional_yield y)
     return -ENOENT;
   }
 
+  return 0;
+}
+
+int ObjectDirectory::get_attr(const DoutPrefixProvider* dpp, CacheObj* object, const char* name, bufferlist& dest, optional_yield y)
+
+{
+  std::string key = build_index(object);
+
+  if (exist_key(object, y)) {
+    std::vector<std::string> fields;
+
+    fields.push_back(name);
+
+    try {
+      boost::system::error_code ec;
+      request req;
+      req.push_range("HMGET", key, fields);
+      response< std::vector<std::string> > resp;
+
+      redis_exec(conn, ec, req, resp, y);
+
+      if (std::get<0>(resp).value().empty()) {
+	return -ENOENT;
+      } else if (ec) {
+	return -ec.value();
+      }
+
+      dest.append(std::get<0>(resp).value()[0]);
+
+    } catch (std::exception &e) {
+      return -EINVAL;
+    }
+  } else {
+    return -ENOENT;
+  }
+
+  ldpp_dout(dpp, 20) << "AMIN: ObjectDirectory: " << __func__ << __LINE__ << " attr is: " << name << " value is: " << dest << dendl;
   return 0;
 }
 

@@ -22,7 +22,9 @@
 #include "common/dout.h" 
 #include "rgw_aio_throttle.h"
 #include "rgw_ssd_driver.h"
+#include "rgw_lsvd_driver.h"
 #include "rgw_redis_driver.h"
+#include "rgw_rest_conn.h"
 
 #include "driver/d4n/d4n_directory.h"
 #include "driver/d4n/d4n_policy.h"
@@ -34,20 +36,24 @@
 
 namespace rgw::d4n {
   class PolicyDriver;
+  class D4NGetObjectCB;
 }
 
 namespace rgw { namespace sal {
 
-using boost::redis::connection;
+using boost::redis::connection;  
+
 
 class D4NFilterDriver : public FilterDriver {
   private:
     std::shared_ptr<connection> conn;
     rgw::cache::CacheDriver* cacheDriver;
+    rgw::cache::CacheDriver* lsvdCacheDriver;
     rgw::d4n::ObjectDirectory* objDir;
     rgw::d4n::BlockDirectory* blockDir;
     rgw::d4n::PolicyDriver* policyDriver;
     boost::asio::io_context& io_context;
+    bool lsvd_cache_enabled = false;
 
   public:
     D4NFilterDriver(Driver* _next, boost::asio::io_context& io_context);
@@ -68,6 +74,7 @@ class D4NFilterDriver : public FilterDriver {
 				  uint64_t olh_epoch,
 				  const std::string& unique_tag) override;
     rgw::cache::CacheDriver* get_cache_driver() { return cacheDriver; }
+    rgw::cache::CacheDriver* get_lsvd_cache_driver() { return lsvdCacheDriver; }
     rgw::d4n::ObjectDirectory* get_obj_dir() { return objDir; }
     rgw::d4n::BlockDirectory* get_block_dir() { return blockDir; }
     rgw::d4n::PolicyDriver* get_policy_driver() { return policyDriver; }
@@ -137,6 +144,8 @@ class D4NFilterObject : public FilterObject {
 	};
 
 	D4NFilterObject* source;
+	bufferlist received_data; //for remote cached data
+	//D4NGetObjectCB* remote_cb;
 
 	D4NFilterReadOp(std::unique_ptr<ReadOp> _next, D4NFilterObject* _source) : FilterReadOp(std::move(_next)),
 										   source(_source) 
@@ -145,11 +154,15 @@ class D4NFilterObject : public FilterObject {
 	}
 	virtual ~D4NFilterReadOp() = default;
 
+	int getRemote(const DoutPrefixProvider* dpp, rgw::d4n::CacheObj *object, std::string remoteCacheAddress, optional_yield y);
 	virtual int prepare(optional_yield y, const DoutPrefixProvider* dpp) override;
 	virtual int iterate(const DoutPrefixProvider* dpp, int64_t ofs, int64_t end,
 	  RGWGetDataCB* cb, optional_yield y) override;
+	virtual int get_attr(const DoutPrefixProvider* dpp, const char* name, bufferlist& dest, optional_yield y) override;
 
       private:
+	bool cached_local = false;
+	std::string cacheLocation; 
 	RGWGetDataCB* client_cb;
 	std::unique_ptr<D4NFilterGetCB> cb;
         std::unique_ptr<rgw::Aio> aio;
@@ -250,5 +263,16 @@ class D4NFilterWriter : public FilterWriter {
    bool is_atomic() { return atomic; };
    const DoutPrefixProvider* dpp() { return save_dpp; } 
 };
+
+class D4NGetObjectCB : public RGWHTTPStreamRWRequest::ReceiveCB {
+public:                                                     
+  bufferlist *in_bl;
+  D4NGetObjectCB(bufferlist* _bl): in_bl(_bl) {}
+  int handle_data(bufferlist& bl, bool *pause) override {
+    this->in_bl->append(bl);
+    return 0;
+  }
+};                                    
+ 
 
 } } // namespace rgw::sal

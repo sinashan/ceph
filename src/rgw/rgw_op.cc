@@ -302,25 +302,35 @@ static int get_obj_policy_from_attr(const DoutPrefixProvider *dpp,
   bufferlist bl;
   int ret = 0;
 
+  ldpp_dout(dpp, 20) << "AMIN: before get_read_op" << __func__ << dendl;
   std::unique_ptr<rgw::sal::Object::ReadOp> rop = obj->get_read_op();
+  ldpp_dout(dpp, 20) << "AMIN: after get_read_op" << __func__ << dendl;
 
   ret = rop->get_attr(dpp, RGW_ATTR_ACL, bl, y);
   if (ret >= 0) {
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << ": " << __LINE__  << dendl;
     ret = decode_policy(dpp, cct, bl, policy);
     if (ret < 0)
       return ret;
   } else if (ret == -ENODATA) {
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << ": " << __LINE__  << dendl;
     /* object exists, but policy is broken */
     ldpp_dout(dpp, 0) << "WARNING: couldn't find acl header for object, generating default" << dendl;
     std::unique_ptr<rgw::sal::User> user = driver->get_user(bucket_info.owner);
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << ": " << __LINE__  << dendl;
     ret = user->load_user(dpp, y);
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << ": " << __LINE__  << dendl;
     if (ret < 0)
       return ret;
 
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << ": " << __LINE__  << dendl;
     policy.create_default(bucket_info.owner, user->get_display_name());
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << ": " << __LINE__  << dendl;
   }
 
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << ": " << __LINE__  << dendl;
   if (storage_class) {
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << ": " << __LINE__  << dendl;
     bufferlist scbl;
     int r = rop->get_attr(dpp, RGW_ATTR_STORAGE_CLASS, scbl, y);
     if (r >= 0) {
@@ -330,6 +340,7 @@ static int get_obj_policy_from_attr(const DoutPrefixProvider *dpp,
     }
   }
 
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << ": " << __LINE__  << dendl;
   return ret;
 }
 
@@ -420,17 +431,21 @@ static int read_obj_policy(const DoutPrefixProvider *dpp,
                            optional_yield y,
                            bool copy_src=false)
 {
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__  << __LINE__ << "ENOENT: " << ENOENT << dendl;
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__  << __LINE__ << "EACCES: " << EACCES << dendl;
   string upload_id;
   upload_id = s->info.args.get("uploadId");
   std::unique_ptr<rgw::sal::Object> mpobj;
   rgw_obj obj;
 
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
   if (!s->system_request && bucket_info.flags & BUCKET_SUSPENDED) {
     ldpp_dout(dpp, 0) << "NOTICE: bucket " << bucket_info.bucket.name
         << " is suspended" << dendl;
     return -ERR_USER_SUSPENDED;
   }
 
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
   // when getting policy info for copy-source obj, upload_id makes no sense.
   // 'copy_src' is used to make this function backward compatible.
   if (!upload_id.empty() && !copy_src) {
@@ -446,15 +461,18 @@ static int read_obj_policy(const DoutPrefixProvider *dpp,
   int ret = get_obj_policy_from_attr(dpp, s->cct, driver, bucket_info,
 				     bucket_attrs, acl, storage_class, object,
 				     s->yield);
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__  << __LINE__ << "ret is: " << ret << dendl;
   if (ret == -ENOENT) {
     /* object does not exist checking the bucket's ACL to make sure
        that we send a proper error code */
     RGWAccessControlPolicy bucket_policy;
     ret = rgw_op_get_bucket_policy_from_attr(dpp, s->cct, driver, bucket_info.owner,
                                              bucket_attrs, bucket_policy, y);
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
     if (ret < 0) {
       return ret;
     }
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
     const rgw_user& bucket_owner = bucket_policy.get_owner().id;
     if (bucket_owner != s->user->get_id() &&
         ! s->auth.identity->is_admin_of(bucket_owner)) {
@@ -488,6 +506,7 @@ static int read_obj_policy(const DoutPrefixProvider *dpp,
       ret = -ENOENT;
     }
   }
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
 
   return ret;
 }
@@ -686,17 +705,22 @@ int rgw_build_bucket_policies(const DoutPrefixProvider *dpp, rgw::sal::Driver* d
 int rgw_build_object_policies(const DoutPrefixProvider *dpp, rgw::sal::Driver* driver,
 			      req_state *s, bool prefetch_data, optional_yield y)
 {
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
   if (rgw::sal::Object::empty(s->object)) {
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
     return 0;
   }
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
   if (!s->bucket_exists) {
     return -ERR_NO_SUCH_BUCKET;
   }
 
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
   s->object->set_atomic();
   if (prefetch_data) {
     s->object->set_prefetch_data();
   }
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
 
   return read_obj_policy(dpp, driver, s, s->bucket->get_info(), s->bucket_attrs,
                          s->object_acl, nullptr, s->iam_policy, s->bucket.get(),
@@ -2197,17 +2221,21 @@ int RGWGetObj::get_lua_filter(std::unique_ptr<RGWGetObj_Filter>* filter, RGWGetO
 
 bool RGWGetObj::prefetch_data()
 {
+  ldpp_dout(this, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
   /* HEAD request, stop prefetch*/
   if (!get_data || s->info.env->exists("HTTP_X_RGW_AUTH")) {
     return false;
   }
+  ldpp_dout(this, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
 
   range_str = s->info.env->get("HTTP_RANGE");
+  ldpp_dout(this, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
   // TODO: add range prefetch
   if (range_str) {
     parse_range();
     return false;
   }
+  ldpp_dout(this, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
 
   return get_data;
 }
@@ -8348,11 +8376,14 @@ int RGWHandler::do_init_permissions(const DoutPrefixProvider *dpp, optional_yiel
 
 int RGWHandler::do_read_permissions(RGWOp *op, bool only_bucket, optional_yield y)
 {
+  ldpp_dout(op, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
   if (only_bucket) {
     /* already read bucket info */
     return 0;
   }
+  ldpp_dout(op, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
   int ret = rgw_build_object_policies(op, driver, s, op->prefetch_data(), y);
+  ldpp_dout(op, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
 
   if (ret < 0) {
     ldpp_dout(op, 10) << "read_permissions on " << s->bucket << ":"

@@ -192,12 +192,16 @@ int rgw_process_authenticated(RGWHandler_REST * const handler,
   }
 
   /* If necessary extract object ACL and put them into req_state. */
+  
   ldpp_dout(op, 2) << "reading permissions" << dendl;
   ret = handler->read_permissions(op, y);
+  ldpp_dout(op, 20) << "AMIN: " << __func__  << __LINE__ << "ret is " << ret << dendl;
   if (ret < 0) {
     return ret;
   }
 
+  // AMIN:  for CURL testing comment this
+  /*
   ldpp_dout(op, 2) << "init op" << dendl;
   ret = op->init_processing(y);
   if (ret < 0) {
@@ -210,7 +214,7 @@ int rgw_process_authenticated(RGWHandler_REST * const handler,
     return ret;
   }
 
-  /* Check if OPA is used to authorize requests */
+  // Check if OPA is used to authorize requests
   if (s->cct->_conf->rgw_use_opa_authz) {
     ret = rgw_opa_authorize(op, s);
     if (ret < 0) {
@@ -218,7 +222,7 @@ int rgw_process_authenticated(RGWHandler_REST * const handler,
     }
   }
 
-  /* AMIN:  for CURL testing comment this */
+  // AMIN:  for CURL testing comment this
   ldpp_dout(op, 2) << "verifying op permissions" << dendl;
   {
     auto span = tracing::rgw::tracer.add_span("verify_permission", s->trace);
@@ -241,8 +245,8 @@ int rgw_process_authenticated(RGWHandler_REST * const handler,
   if (ret < 0) {
     return ret;
   }
-  /* AMIN : until here */
-
+  // AMIN : until here 
+  */
   ldpp_dout(op, 2) << "pre-executing" << dendl;
   op->pre_exec();
 
@@ -392,8 +396,18 @@ int process_request(const RGWProcessEnv& penv,
     s->trace = tracing::rgw::tracer.start_trace(op->name(), s->trace_enabled);
     s->trace->SetAttribute(tracing::rgw::TRANS_ID, s->trans_id);
 
+    //bool lsvd_cache_enabled = s->cct->_conf->rgw_lsvd_cache_enabled;
     ret = rgw_process_authenticated(handler, op, req, s, yield, driver);
-    if (ret < 0) {
+    /*
+    if (ret == -ENOENT && lsvd_cache_enabled == true){
+      dout(10) << "Object doesn't exist, trying LSVD..." << dendl;
+      ret = driver->get_lsvd_policy_driver->sendRemote(const DoutPrefixProvider* dpp, CacheBlock *victim, std::string remoteCacheAddress, std::string key, bufferlist* out_bl, yield);
+      if (ret < 0) {
+        abort_early(s, op, ret, handler, yield);
+        goto done;
+      }
+    }
+    else*/ if (ret < 0) {
       abort_early(s, op, ret, handler, yield);
       goto done;
     }

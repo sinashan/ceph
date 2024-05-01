@@ -20,6 +20,8 @@ struct CacheObj {
   std::string creationTime; /* Creation time of the S3 Object */
   bool dirty;
   std::vector<std::string> hostsList; /* List of hostnames <ip:port> of object locations for multiple backends */
+  std::string version;
+  rgw::sal::Attrs attrs; /* List of object attributes */
 };
 
 struct CacheBlock {
@@ -53,6 +55,7 @@ class ObjectDirectory: public Directory {
     int copy(CacheObj* object, std::string copyName, std::string copyBucketName, optional_yield y);
     int del(CacheObj* object, optional_yield y);
     int update_field(CacheObj* object, std::string field, std::string value, optional_yield y);
+    int get_attr(const DoutPrefixProvider* dpp, CacheObj* object, const char* name, bufferlist& dest, optional_yield y);
 
   private:
     std::shared_ptr<connection> conn;
