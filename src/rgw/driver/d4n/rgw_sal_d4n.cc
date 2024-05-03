@@ -462,28 +462,8 @@ int D4NFilterObject::D4NFilterReadOp::get_attr(const DoutPrefixProvider* dpp, co
   */
 }
 
-int D4NFilterObject::D4NFilterReadOp::getRemote(const DoutPrefixProvider* dpp, rgw::d4n::CacheObj *object, std::string remoteCacheAddress, optional_yield y)
+int D4NFilterObject::D4NFilterReadOp::getRemote(const DoutPrefixProvider* dpp, std::string key, std::string remoteCacheAddress, optional_yield y)
 {
-  std::string objectName = source->get_key().get_oid();
-  std::string bucketName = source->get_bucket()->get_name();
-  std::string version = object->version;
-  bool dirty = object->dirty;
-
-  ldpp_dout(dpp, 20) << " AMIN: " << __func__ << " : " << __LINE__ << ": bucket name is: " << bucketName << dendl;                          
-  std::string key;
-  
-  if (dirty == true) {
-    if (object->version.empty())
-      key = "D_"+ bucketName + "_" + objectName;
-    else
-      key = "D_"+ bucketName + "_" + version + "_" + objectName;
-  } else {
-    if (object->version.empty())
-      key = bucketName + "_" + objectName;
-    else
-      key = bucketName + "_" + version + "_" + objectName;
-  }
- 
   RGWAccessKey accessKey;
   std::unique_ptr<rgw::sal::User> c_user = source->driver->get_user(source->get_bucket()->get_owner());
   int ret = c_user->load_user(dpp, y);
@@ -495,6 +475,8 @@ int D4NFilterObject::D4NFilterReadOp::getRemote(const DoutPrefixProvider* dpp, r
   }
   accessKey.id = c_user->get_info().access_keys.begin()->second.id;
   accessKey.key = c_user->get_info().access_keys.begin()->second.key;
+
+  std::string bucketName = source->get_bucket()->get_name();
 
   bufferlist out_bl;
   HostStyle host_style = PathStyle;
@@ -537,6 +519,7 @@ int D4NFilterObject::D4NFilterReadOp::prepare(optional_yield y, const DoutPrefix
 
   //the object is cached some where; local or remote.
   if (retDir == 0){
+    source->set_obj_size(object.size);
     if (object.hostsList.size() > 0){
       cached_local = 2; 
       for (auto &it : object.hostsList){
@@ -549,7 +532,7 @@ int D4NFilterObject::D4NFilterReadOp::prepare(optional_yield y, const DoutPrefix
       //TODO: we should insert ILP algorithm here
       if (cached_local == 2){ //remote
         cacheLocation = object.hostsList.back(); //we read the object from the last cache accessing it
-        return getRemote(dpp, &object, cacheLocation, y);
+        return 0;//getRemote(dpp, &object, cacheLocation, y);
       }
     }
   }
@@ -566,10 +549,6 @@ int D4NFilterObject::D4NFilterReadOp::prepare(optional_yield y, const DoutPrefix
   int ret = next->prepare(y, dpp);
 
   rgw::sal::Attrs attrs;
-
-  auto obj_size = source->get_obj_size();
-  ldpp_dout(dpp, 10) << "AMIN: D4NFilterObject:" << __func__ << "(): size is: " << obj_size << dendl;
-
 
   if (source->driver->get_cache_driver()->get_attrs(dpp, source->get_key().get_oid(), attrs, y) < 0) {
     ldpp_dout(dpp, 10) << "D4NFilterObject::D4NFilterReadOp::" << __func__ << "(): CacheDriver get_attrs method failed." << dendl;
@@ -700,7 +679,6 @@ int D4NFilterObject::D4NFilterReadOp::flush(const DoutPrefixProvider* dpp, rgw::
       time_t creationTime = ceph::real_clock::to_time_t(source->get_mtime());
 
       rgw::d4n::CacheBlock block;
-      rgw::d4n::BlockDirectory* blockDir = source->driver->get_block_dir();
       block.cacheObj.objName = source->get_key().get_oid();
       block.cacheObj.bucketName = source->get_bucket()->get_name();
       block.blockID = ofs;
@@ -729,29 +707,29 @@ int D4NFilterObject::D4NFilterReadOp::flush(const DoutPrefixProvider* dpp, rgw::
   return 0;
 }
 
-int D4NFilterObject::D4NFilterReadOp::remoteFlush(const DoutPrefixProvider* dpp, int64_t ofs, int64_t end,
+int D4NFilterObject::D4NFilterReadOp::remoteFlush(const DoutPrefixProvider* dpp, int64_t ofs, int64_t len,
                         RGWGetDataCB* cb, optional_yield y)
 {
   bufferlist bl;
 
   //we need to process ofs-end part of data, not all of it
-  received_data.begin(ofs).copy(end - ofs + 1, bl);
-  cb->handle_data(received_data, ofs, end - ofs + 1);
+  received_data.begin(ofs).copy(len, bl);
+  cb->handle_data(received_data, ofs, len);
 
-    rgw::d4n::BlockDirectory* blockDir = source->driver->get_block_dir();
-    rgw::d4n::ObjectDirectory* objectDir = source->driver->get_obj_dir();
+  rgw::d4n::BlockDirectory* blockDir = source->driver->get_block_dir();
+  rgw::d4n::ObjectDirectory* objectDir = source->driver->get_obj_dir();
 
-    rgw::d4n::CacheBlock block, existing_block;
-    rgw::d4n::CacheObj object;
+  rgw::d4n::CacheBlock block, existing_block;
+  rgw::d4n::CacheObj object;
 
-    rgw::d4n::CacheObj existing_object;
-    existing_object.objName = source->get_key().get_oid();
-    existing_object.bucketName = source->get_bucket()->get_name();
-    int retDir = objectDir->get(&existing_object, y);
-    if (retDir < 0){
-      ldpp_dout(dpp, 10) << "ERROR: D4NFilterObject::remoteFlush: could not update directory! " << dendl;
-      return 0; //data is already returned to the user 
-    }
+  rgw::d4n::CacheObj existing_object;
+  existing_object.objName = source->get_key().get_oid();
+  existing_object.bucketName = source->get_bucket()->get_name();
+  int retDir = objectDir->get(&existing_object, y);
+  if (retDir < 0){
+    ldpp_dout(dpp, 10) << "ERROR: D4NFilterObject::remoteFlush: could not update directory! " << dendl;
+    return 0; //data is already returned to the user 
+  }
 
 
     block.hostsList.push_back(blockDir->cct->_conf->rgw_local_cache_address); 
@@ -789,11 +767,11 @@ int D4NFilterObject::D4NFilterReadOp::remoteFlush(const DoutPrefixProvider* dpp,
 
     ldpp_dout(dpp, 20) << __func__ << ": version stored in update method is: " << version << dendl;
 
-    if (bl.length() > 0 && (size == end + 1)) { // if this is the last part, write it to cache
-      std::string oid = prefix + "_" + std::to_string(ofs) + "_" + std::to_string(end - ofs + 1); //received_data can be bigger than a blcok
+    if (bl.length() > 0 && (size == len)) { // if this is the last part, write it to cache
+      std::string oid = prefix + "_" + std::to_string(ofs) + "_" + std::to_string(len); //received_data can be bigger than a blcok
       if (!source->driver->get_policy_driver()->get_cache_policy()->exist_key(oid)) {
         block.blockID = ofs;
-        block.size = end - ofs + 1;
+        block.size = len;
         block.version = version;
         block.dirty = false; 
         auto ret = source->driver->get_policy_driver()->get_cache_policy()->eviction(dpp, block.size, y);
@@ -900,11 +878,102 @@ int D4NFilterObject::D4NFilterReadOp::remoteFlush(const DoutPrefixProvider* dpp,
   return 0;
 }
 
+int D4NFilterObject::D4NFilterReadOp::iterateRemote(const DoutPrefixProvider* dpp, int64_t ofs, int64_t end,
+                        RGWGetDataCB* cb, optional_yield y) 
+{
+  rgw::d4n::CacheObj object;
+  object.objName = source->get_key().get_oid();
+  object.bucketName = source->get_bucket()->get_name();
+  int ret = source->driver->get_obj_dir()->get(&object, y);
+  if (ret < 0){
+    ldpp_dout(dpp, 10) << "ERROR: D4NFilterObject::iterateRemote: could not get data from directory! " << dendl;
+    return ret;
+  }
+  bool dirty = object.dirty;
+  std::string version = object.version;
+
+  std::string prefix;
+  if (version.empty()) { //for versioned objects, get_oid() returns an oid with versionId added
+    prefix = source->get_bucket()->get_name() + "_" + source->get_key().get_oid();
+  } else {
+    prefix = source->get_bucket()->get_name() + "_" + version + "_" + source->get_key().get_oid();
+  }
+
+  ldpp_dout(dpp, 20) << __func__ << "prefix: " << prefix << dendl;
+  ldpp_dout(dpp, 20) << __func__ << "oid: " << source->get_key().get_oid() << " ofs: " << ofs << " end: " << end << dendl;
+
+  source->set_prefix(prefix);
+
+  uint64_t obj_max_req_size = g_conf()->rgw_get_obj_max_req_size;
+  uint64_t start_part_num = 0;
+  uint64_t part_num = ofs/obj_max_req_size; //part num of ofs wrt start of the object
+  uint64_t adjusted_start_ofs = part_num*obj_max_req_size; //in case of ranged request, adjust the start offset to the beginning of a chunk/ part
+  uint64_t diff_ofs = ofs - adjusted_start_ofs; //difference between actual offset and adjusted offset
+  off_t len = (end - adjusted_start_ofs) + 1;
+  uint64_t num_parts = (len%obj_max_req_size) == 0 ? len/obj_max_req_size : (len/obj_max_req_size) + 1; //calculate num parts based on adjusted offset
+  //len_to_read is the actual length read from a part/ chunk in cache, while part_len is the length of the chunk/ part in cache 
+  uint64_t len_to_read = 0, part_len = 0;
+
+  ldpp_dout(dpp, 20) << __func__ << "obj_max_req_size " << obj_max_req_size << 
+  " num_parts " << num_parts << " adjusted_start_offset: " << adjusted_start_ofs << " len: " << len << dendl;
+
+  this->offset = ofs;
+
+  do {
+    uint64_t id = adjusted_start_ofs, read_ofs = 0; //read_ofs is the actual offset to start reading from the current part/ chunk
+    if (start_part_num == (num_parts - 1)) {
+      len_to_read = len;
+      part_len = len;
+    } else {
+      len_to_read = obj_max_req_size;
+      part_len = obj_max_req_size;
+    }
+    if (start_part_num == 0) {
+      len_to_read -= diff_ofs;
+      id += diff_ofs;
+      read_ofs = diff_ofs;
+    }
+
+    ceph::bufferlist bl;
+    std::string oid_in_cache = prefix + "_" + std::to_string(adjusted_start_ofs) + "_" + std::to_string(part_len);
+
+    ldpp_dout(dpp, 20) << "D4NFilterObject::iterate:: " << __func__ << "(): READ FROM CACHE: oid=" << oid_in_cache << " length to read is: " << len_to_read << " part num: " << start_part_num << 
+    " read_ofs: " << read_ofs << " part len: " << part_len << dendl;
+
+    std::string key = oid_in_cache;
+
+    if (dirty == true) 
+      key = "D_" + oid_in_cache;
+
+    ret = getRemote(dpp, key, cacheLocation, y);
+    if (ret < 0){
+      ldpp_dout(dpp, 20) << "D4NFilterObject: " << __func__ << "(): Fetching block from Remote Failed. Key is: " << key << dendl;
+      return ret;
+    }
+    ret = remoteFlush(dpp, adjusted_start_ofs, part_len, cb, y);
+    if (ret < 0){
+      ldpp_dout(dpp, 20) << "D4NFilterObject: " << __func__ << "(): Flushing block from Remote Failed. Key is: " << key << dendl;
+      return ret;
+    }
+
+    if (start_part_num != (num_parts - 1)) {
+      adjusted_start_ofs += obj_max_req_size;
+    }
+
+    start_part_num += 1;
+    len -= obj_max_req_size;
+  } while (start_part_num < num_parts);
+
+  ldpp_dout(dpp, 20) << "D4NFilterObject: " << __func__ << "(): Fetching object from backend store" << dendl;
+
+  return 0;
+}
+
 int D4NFilterObject::D4NFilterReadOp::iterate(const DoutPrefixProvider* dpp, int64_t ofs, int64_t end,
                         RGWGetDataCB* cb, optional_yield y) 
 {
-  if (cached_local == 2) //remote
-    return remoteFlush(dpp, ofs, end, cb, y);
+  if (cached_local >= 2) //remote or lsvd
+    return iterateRemote(dpp, ofs, end, cb, y);
 
   const uint64_t window_size = g_conf()->rgw_get_obj_window_size;
   std::string version = source->get_object_version();
