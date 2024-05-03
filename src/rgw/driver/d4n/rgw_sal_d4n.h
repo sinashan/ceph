@@ -153,7 +153,7 @@ class D4NFilterObject : public FilterObject {
           cb = std::make_unique<D4NFilterGetCB>(source->driver, source);
 	}
 	virtual ~D4NFilterReadOp() = default;
-
+	int remoteFlush(const DoutPrefixProvider* dpp, int64_t ofs, int64_t end, RGWGetDataCB* cb, optional_yield y);
 	int getRemote(const DoutPrefixProvider* dpp, rgw::d4n::CacheObj *object, std::string remoteCacheAddress, optional_yield y);
 	virtual int prepare(optional_yield y, const DoutPrefixProvider* dpp) override;
 	virtual int iterate(const DoutPrefixProvider* dpp, int64_t ofs, int64_t end,
@@ -161,14 +161,14 @@ class D4NFilterObject : public FilterObject {
 	virtual int get_attr(const DoutPrefixProvider* dpp, const char* name, bufferlist& dest, optional_yield y) override;
 
       private:
-	bool cached_local = false;
+	char cached_local = 0;
 	std::string cacheLocation; 
 	RGWGetDataCB* client_cb;
 	std::unique_ptr<D4NFilterGetCB> cb;
         std::unique_ptr<rgw::Aio> aio;
 	uint64_t offset = 0; // next offset to write to client
         rgw::AioResultList completed; // completed read results, sorted by offset
-      std::unordered_map<uint64_t, std::pair<uint64_t,uint64_t>> blocks_info;
+        std::unordered_map<uint64_t, std::pair<uint64_t,uint64_t>> blocks_info;
 
 	int flush(const DoutPrefixProvider* dpp, rgw::AioResultList&& results, optional_yield y);
 	void cancel();

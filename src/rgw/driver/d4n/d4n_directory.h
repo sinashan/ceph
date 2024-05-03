@@ -21,6 +21,7 @@ struct CacheObj {
   bool dirty;
   std::vector<std::string> hostsList; /* List of hostnames <ip:port> of object locations for multiple backends */
   std::string version;
+  uint64_t size; /* Object size in bytes */
   rgw::sal::Attrs attrs; /* List of object attributes */
 };
 

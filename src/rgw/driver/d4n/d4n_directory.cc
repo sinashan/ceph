@@ -102,6 +102,10 @@ int ObjectDirectory::set(CacheObj* object, optional_yield y)
 
   redisValues.push_back(endpoint); 
 
+  redisValues.push_back("version");
+  redisValues.push_back(object->version);
+  redisValues.push_back("size");
+  redisValues.push_back(std::to_string(object->size));
   for (auto& it : object->attrs) {
     redisValues.push_back(it.first);
     redisValues.push_back(it.second.to_str());
@@ -141,6 +145,7 @@ int ObjectDirectory::get(CacheObj* object, optional_yield y)
     fields.push_back("dirty");
     fields.push_back("objHosts");
     fields.push_back("version");
+    fields.push_back("size");
     fields.push_back(RGW_ATTR_ACL);
 
     try {
@@ -173,7 +178,8 @@ int ObjectDirectory::get(CacheObj* object, optional_yield y)
       }
 
       object->version = std::get<0>(resp).value()[5];
-      object->attrs[RGW_ATTR_ACL] = buffer::list::static_from_string(std::get<0>(resp).value()[6]);
+      object->size = boost::lexical_cast<uint64_t>(std::get<0>(resp).value()[6]);
+      object->attrs[RGW_ATTR_ACL] = buffer::list::static_from_string(std::get<0>(resp).value()[7]);
 
     } catch (std::exception &e) {
       return -EINVAL;
