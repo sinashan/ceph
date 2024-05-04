@@ -425,6 +425,7 @@ int BlockDirectory::set(CacheBlock* block, optional_yield y)
   redisValues.push_back(block->cacheObj.creationTime); 
   redisValues.push_back("dirty");
   redisValues.push_back(std::to_string(block->cacheObj.dirty));
+  /*
   redisValues.push_back("objHosts");
   
   endpoint.clear();
@@ -439,7 +440,7 @@ int BlockDirectory::set(CacheBlock* block, optional_yield y)
     endpoint.pop_back();
 
   redisValues.push_back(endpoint);
-
+  */
   try {
     boost::system::error_code ec;
     request req;
@@ -475,7 +476,7 @@ int BlockDirectory::get(CacheBlock* block, optional_yield y)
     fields.push_back("bucketName");
     fields.push_back("creationTime");
     fields.push_back("dirty");
-    fields.push_back("objHosts");
+    //fields.push_back("objHosts");
 
     try {
       boost::system::error_code ec;
@@ -512,7 +513,7 @@ int BlockDirectory::get(CacheBlock* block, optional_yield y)
       block->cacheObj.creationTime = std::get<0>(resp).value()[7];
       block->cacheObj.dirty = boost::lexical_cast<bool>(std::get<0>(resp).value()[8]);
       block->dirty = boost::lexical_cast<bool>(std::get<0>(resp).value()[8]);
-
+      /*
       {
         std::stringstream ss(boost::lexical_cast<std::string>(std::get<0>(resp).value()[9]));
 	block->cacheObj.hostsList.clear();
@@ -522,7 +523,7 @@ int BlockDirectory::get(CacheBlock* block, optional_yield y)
 	  std::getline(ss, host, '_');
 	  block->cacheObj.hostsList.push_back(host);
 	}
-      }
+      }*/
     } catch (std::exception &e) {
       return -EINVAL;
     }

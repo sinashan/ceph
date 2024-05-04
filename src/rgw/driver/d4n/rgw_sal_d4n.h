@@ -239,6 +239,7 @@ class D4NFilterWriter : public FilterWriter {
     optional_yield y;
     bool d4n_writecache;
     time_t startTime;
+    std::string objVersion;
 
   public:
     D4NFilterWriter(std::unique_ptr<Writer> _next, D4NFilterDriver* _driver, Object* _obj, 

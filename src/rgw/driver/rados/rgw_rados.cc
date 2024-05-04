@@ -1794,8 +1794,11 @@ int RGWRados::Bucket::List::list_objects_ordered(
   int count = 0;
   bool truncated = true;
   bool cls_filtered = false;
-  const int64_t max = // protect against memory issues and negative vals
-    std::min(bucket_list_objects_absolute_max, std::max(int64_t(0), max_p));
+ 
+  //FIXME: AMIN uncomment these lines
+  //const int64_t max = // protect against memory issues and negative vals
+  //  std::min(bucket_list_objects_absolute_max, std::max(int64_t(0), max_p));
+  const int64_t max = 100;
   int read_ahead = std::max(cct->_conf->rgw_list_bucket_min_readahead, max);
 
   result->clear();
