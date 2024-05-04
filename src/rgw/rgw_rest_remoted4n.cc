@@ -151,8 +151,8 @@ void RGWOp_RemoteD4N_Get::execute(optional_yield y) {
   }
 
   if (dirty)
-    //RD_bucket_version_key_...
-    key = string("RD_") + oid_in_cache;
+    //D_bucket_version_key_...
+    key = string("D_") + oid_in_cache;
   else 
     key = oid_in_cache;
 
@@ -224,6 +224,7 @@ void RGWOp_RemoteD4N_Put::execute(optional_yield y) {
   ldpp_dout(s, 20) << "AMIN: " << __func__ << ": " << __LINE__ << dendl;
   bufferlist bl;
   rgw::sal::Attrs attrs;
+  string prefix;
   string bucketName;
   string objectName;
   uint64_t offset;
@@ -248,12 +249,14 @@ void RGWOp_RemoteD4N_Put::execute(optional_yield y) {
   char* end;
   if (dirty == true){
     if (v.size() == 5){
+      prefix = v[0];
       bucketName = v[1];
       objectName = v[2];     
       offset = strtoull(v[3].c_str(), &end,10);
       len = strtoull(v[4].c_str(), &end,10);
     }
     else if (v.size() == 6){
+      prefix = v[0];
       bucketName = v[1];
       version = v[2];
       objectName = v[3];     
@@ -268,12 +271,14 @@ void RGWOp_RemoteD4N_Put::execute(optional_yield y) {
   }
   else{ // dirty == flase
     if (v.size() == 4){
+      prefix = "";
       bucketName = v[0];
       objectName = v[1];     
       offset = strtoull(v[2].c_str(), &end,10);
       len = strtoull(v[3].c_str(), &end,10);
     }
     else if (v.size() == 5){
+      prefix = "";
       bucketName = v[0];     
       version = v[1];
       objectName = v[2];     
@@ -288,8 +293,8 @@ void RGWOp_RemoteD4N_Put::execute(optional_yield y) {
   }
   oid_in_cache = bucketName + "_" + version + "_" + objectName + "_" + to_string(offset) + "_" + to_string(len);
   if (dirty)
-    //RD_bucket_version_key_...
-    key = string("RD_") + oid_in_cache;
+    //D_bucket_version_key_...
+    key = string("D_") + oid_in_cache;
   else
     key = oid_in_cache;
 
@@ -318,6 +323,7 @@ void RGWOp_RemoteD4N_Put::execute(optional_yield y) {
   }
 
   time_t creationTime = time(NULL);
+  dirty = false; //we should not clean it
 
   //FIXME: AMIN: this is only for test, remove it
   rgw_user user;

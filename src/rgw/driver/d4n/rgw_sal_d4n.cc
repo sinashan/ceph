@@ -515,11 +515,13 @@ int D4NFilterObject::D4NFilterReadOp::prepare(optional_yield y, const DoutPrefix
   object.bucketName = source->get_bucket()->get_name();
   retDir = source->driver->get_obj_dir()->get(&object, y);
 
+  ldpp_dout(dpp, 20) << "AMIN: D4NFilterObject:" << __func__ << ": object size is: "  << object.size << dendl;
   //TODO: we have to check object's size and if it is small send a request to LSVD cache
 
   //the object is cached some where; local or remote.
   if (retDir == 0){
     source->set_obj_size(object.size);
+    ldpp_dout(dpp, 20) << "AMIN: D4NFilterObject:" << __func__ << ": " << __LINE__ << dendl;
     if (object.hostsList.size() > 0){
       cached_local = 2; 
       for (auto &it : object.hostsList){
@@ -1438,6 +1440,7 @@ int D4NFilterWriter::process(bufferlist&& data, uint64_t offset)
 	
       ldpp_dout(save_dpp, 10) << "D4NFilterObject::D4NFilterWriteOp::" << __func__ << "(): calling next process" << dendl;
       ret = next->process(std::move(data), offset);
+      /*
       if (ret == 0){
         if (!blockDir->exist_key(&block, y)) {
           if (blockDir->set(&block, y) < 0) 
@@ -1459,7 +1462,8 @@ int D4NFilterWriter::process(bufferlist&& data, uint64_t offset)
             }
           }
         }
-      } else{
+      } else{*/
+      if (ret < 0){
           ldpp_dout(save_dpp, 1) << "D4NFilterObject::D4NFilterWriteOp::process" << __func__ << "(): ERROR: writting data to the backend failed!" << dendl;
 	  return ret;
       }
@@ -1562,6 +1566,8 @@ int D4NFilterWriter::complete(size_t accounted_size, const std::string& etag,
 		 .creationTime = std::to_string(creationTime), 
 		 .dirty = dirty,
 		 .hostsList = hostsList,
+		 .version = version,
+		 .size = accounted_size,
 		 .attrs = obj_attrs
               };
 
