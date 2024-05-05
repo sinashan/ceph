@@ -488,7 +488,8 @@ int D4NFilterObject::D4NFilterReadOp::getRemote(const DoutPrefixProvider* dpp, s
 
   auto sender = new RGWRESTStreamRWRequest(dpp->get_cct(), "GET", remoteCacheAddress, &cb, NULL, NULL, "", host_style);
 
-  ret = sender->send_request(dpp, &accessKey, extra_headers, "admin/remoted4n/"+bucketName+"/"+key, nullptr, &out_bl);                 
+  //ret = sender->send_request(dpp, &accessKey, extra_headers, "admin/remoted4n/"+bucketName+"/"+key, nullptr, &out_bl);
+  ret = sender->send_request(dpp, &accessKey, extra_headers, "admin/swift/auth/"+bucketName+"/"+key, nullptr, &out_bl);                 
   if (ret < 0) {                                                                                      
     delete sender;                                                                                       
     return ret;                                                                                       
@@ -536,7 +537,8 @@ int D4NFilterObject::D4NFilterReadOp::prepare(optional_yield y, const DoutPrefix
       //TODO: we should insert ILP algorithm here
       if (cached_local == 2){ //remote
         cacheLocation = object.hostsList.back(); //we read the object from the last cache accessing it
-        return 0;//getRemote(dpp, &object, cacheLocation, y);
+        return getRemote(dpp, source->get_key().get_oid(), cacheLocation, y);
+	//return 0;
       }
     }
   }
@@ -893,7 +895,7 @@ int D4NFilterObject::D4NFilterReadOp::iterateRemote(const DoutPrefixProvider* dp
     ldpp_dout(dpp, 10) << "ERROR: D4NFilterObject::iterateRemote: could not get data from directory! " << dendl;
     return ret;
   }
-  bool dirty = object.dirty;
+  //bool dirty = object.dirty;
   std::string version = object.version;
 
   std::string prefix;
@@ -906,6 +908,8 @@ int D4NFilterObject::D4NFilterReadOp::iterateRemote(const DoutPrefixProvider* dp
   ldpp_dout(dpp, 20) << __func__ << "prefix: " << prefix << dendl;
   ldpp_dout(dpp, 20) << __func__ << "oid: " << source->get_key().get_oid() << " ofs: " << ofs << " end: " << end << dendl;
 
+  this->client_cb = cb;
+  this->cb->set_client_cb(cb, dpp, &y);
   source->set_prefix(prefix);
 
   uint64_t obj_max_req_size = g_conf()->rgw_get_obj_max_req_size;
@@ -941,9 +945,10 @@ int D4NFilterObject::D4NFilterReadOp::iterateRemote(const DoutPrefixProvider* dp
     ceph::bufferlist bl;
     std::string oid_in_cache = prefix + "_" + std::to_string(adjusted_start_ofs) + "_" + std::to_string(part_len);
 
-    ldpp_dout(dpp, 20) << "D4NFilterObject::iterate:: " << __func__ << "(): READ FROM CACHE: oid=" << oid_in_cache << " length to read is: " << len_to_read << " part num: " << start_part_num << 
+    ldpp_dout(dpp, 20) << "D4NFilterObject::iterateRemote:: " << __func__ << "(): READ FROM CACHE: oid=" << oid_in_cache << " length to read is: " << len_to_read << " part num: " << start_part_num << 
     " read_ofs: " << read_ofs << " part len: " << part_len << dendl;
 
+    /*
     std::string key = oid_in_cache;
 
     if (dirty == true) 
@@ -954,11 +959,15 @@ int D4NFilterObject::D4NFilterReadOp::iterateRemote(const DoutPrefixProvider* dp
       ldpp_dout(dpp, 20) << "D4NFilterObject: " << __func__ << "(): Fetching block from Remote Failed. Key is: " << key << dendl;
       return ret;
     }
+    
     ret = remoteFlush(dpp, adjusted_start_ofs, part_len, cb, y);
     if (ret < 0){
       ldpp_dout(dpp, 20) << "D4NFilterObject: " << __func__ << "(): Flushing block from Remote Failed. Key is: " << key << dendl;
       return ret;
     }
+    */
+
+    cb->handle_data(received_data, read_ofs, len_to_read);
 
     if (start_part_num != (num_parts - 1)) {
       adjusted_start_ofs += obj_max_req_size;
@@ -978,6 +987,7 @@ int D4NFilterObject::D4NFilterReadOp::iterate(const DoutPrefixProvider* dpp, int
 {
   if (cached_local >= 2) //remote or lsvd
     return iterateRemote(dpp, ofs, end, cb, y);
+    //return getRemote(dpp, ofs, end, cb, y);
 
   const uint64_t window_size = g_conf()->rgw_get_obj_window_size;
   std::string version = source->get_object_version();
@@ -1607,6 +1617,7 @@ int D4NFilterWriter::complete(size_t accounted_size, const std::string& etag,
 		 .attrs = obj_attrs
               };
 
+    //TODO: check if the key exist  in the directory, if yes, uopdate it instead of set
     if (driver->get_obj_dir()->set(&object, y) < 0) 
       ldpp_dout(save_dpp, 10) << "D4NFilterWriter::" << __func__ << "(): ObjectDirectory set method failed." << dendl;
 
