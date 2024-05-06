@@ -62,9 +62,11 @@ int LFUDAPolicy::init(CephContext *cct, const DoutPrefixProvider* dpp, asio::io_
 
   ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
   /* Spawn write cache cleaning thread */
-  tc = std::thread(&CachePolicy::cleaning, this, dpp);
-  tc.detach();
-  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
+  if (dpp->get_cct()->_conf->d4n_writecache_enabled == true){
+    tc = std::thread(&CachePolicy::cleaning, this, dpp);
+    tc.detach();
+    ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
+  }
 
   try {
     boost::system::error_code ec;
