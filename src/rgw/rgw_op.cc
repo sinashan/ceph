@@ -2309,20 +2309,28 @@ void RGWGetObj::execute(optional_yield y)
   op_ret = read_op->prepare(s->yield, this);
   version_id = s->object->get_instance();
   s->obj_size = s->object->get_obj_size();
+  ldpp_dout(this, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
+  ldpp_dout(this, 20) << "AMIN: " << __func__  << __LINE__ << " version is: " << version_id << dendl;
+  ldpp_dout(this, 20) << "AMIN: " << __func__  << __LINE__ << " obj size is: " << s->obj_size<< dendl;
   attrs = s->object->get_attrs();
+  ldpp_dout(this, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
   multipart_parts_count = read_op->params.parts_count;
+  ldpp_dout(this, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
   if (op_ret < 0)
     goto done_err;
 
+  ldpp_dout(this, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
   /* STAT ops don't need data, and do no i/o */
   if (get_type() == RGW_OP_STAT_OBJ) {
     return;
   }
+  ldpp_dout(this, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
   if (s->info.env->exists("HTTP_X_RGW_AUTH")) {
     op_ret = 0;
     goto done_err;
   }
   /* start gettorrent */
+  ldpp_dout(this, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
   if (get_torrent) {
     attr_iter = attrs.find(RGW_ATTR_CRYPT_MODE);
     if (attr_iter != attrs.end() && attr_iter->second.to_str() == "SSE-C-AES256") {
@@ -2348,6 +2356,7 @@ void RGWGetObj::execute(optional_yield y)
   }
   /* end gettorrent */
 
+  ldpp_dout(this, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
   // run lua script on decompressed and decrypted data - first filter runs last
   op_ret = get_lua_filter(&run_lua, filter);
   if (run_lua != nullptr) {
@@ -2356,6 +2365,7 @@ void RGWGetObj::execute(optional_yield y)
   if (op_ret < 0) {
     goto done_err;
   }
+  ldpp_dout(this, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
 
 #ifdef WITH_ARROW_FLIGHT
   if (s->penv.flight_store) {
@@ -2374,6 +2384,7 @@ void RGWGetObj::execute(optional_yield y)
     ldpp_dout(this, 0) << "ERROR: failed to decode compression info, cannot decompress" << dendl;
     goto done_err;
   }
+  ldpp_dout(this, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
 
   // where encryption and compression are combined, compression was applied to
   // the data before encryption. if the system header rgwx-skip-decrypt is
@@ -2387,6 +2398,7 @@ void RGWGetObj::execute(optional_yield y)
     filter = &*decompress;
   }
 
+  ldpp_dout(this, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
   attr_iter = attrs.find(RGW_ATTR_OBJ_REPLICATION_TRACE);
   if (attr_iter != attrs.end()) {
     try {
@@ -2403,6 +2415,7 @@ void RGWGetObj::execute(optional_yield y)
       }
     } catch (const buffer::error&) {}
   }
+  ldpp_dout(this, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
 
   if (get_type() == RGW_OP_GET_OBJ && get_data) {
     op_ret = handle_cloudtier_obj(attrs, sync_cloudtiered);
@@ -2415,6 +2428,7 @@ void RGWGetObj::execute(optional_yield y)
       goto done_err;
     }
   }
+  ldpp_dout(this, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
 
   attr_iter = attrs.find(RGW_ATTR_USER_MANIFEST);
   if (attr_iter != attrs.end() && !skip_manifest) {
@@ -2426,6 +2440,7 @@ void RGWGetObj::execute(optional_yield y)
     }
     return;
   }
+  ldpp_dout(this, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
 
   attr_iter = attrs.find(RGW_ATTR_SLO_MANIFEST);
   if (attr_iter != attrs.end() && !skip_manifest) {
@@ -2438,6 +2453,7 @@ void RGWGetObj::execute(optional_yield y)
     }
     return;
   }
+  ldpp_dout(this, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
 
   // for range requests with obj size 0
   if (range_str && !(s->obj_size)) {
@@ -2446,14 +2462,17 @@ void RGWGetObj::execute(optional_yield y)
     goto done_err;
   }
 
+  ldpp_dout(this, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
   op_ret = s->object->range_to_ofs(s->obj_size, ofs, end);
   if (op_ret < 0)
     goto done_err;
   total_len = (ofs <= end ? end + 1 - ofs : 0);
+  ldpp_dout(this, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
 
   ofs_x = ofs;
   end_x = end;
   filter->fixup_range(ofs_x, end_x);
+  ldpp_dout(this, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
 
   /* Check whether the object has expired. Swift API documentation
    * stands that we should return 404 Not Found in such case. */
@@ -2461,11 +2480,13 @@ void RGWGetObj::execute(optional_yield y)
     op_ret = -ENOENT;
     goto done_err;
   }
+  ldpp_dout(this, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
 
   /* Decode S3 objtags, if any */
   rgw_cond_decode_objtags(s, attrs);
 
   start = ofs;
+  ldpp_dout(this, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
 
   attr_iter = attrs.find(RGW_ATTR_MANIFEST);
   op_ret = this->get_decrypt_filter(&decrypt, filter,
@@ -2478,15 +2499,21 @@ void RGWGetObj::execute(optional_yield y)
     goto done_err;
   }
 
+  ldpp_dout(this, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
+  ldpp_dout(this, 20) << "AMIN: " << __func__  << __LINE__ << " get data is:" << get_data << dendl;
+  ldpp_dout(this, 20) << "AMIN: " << __func__  << __LINE__ << " ofs and end are: " << ofs << end << dendl;
 
   if (!get_data || ofs > end) {
     send_response_data(bl, 0, 0);
     return;
   }
 
+  ldpp_dout(this, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
   rgw::op_counters::inc(counters, l_rgw_op_get_obj_b, end-ofs);
 
+  ldpp_dout(this, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
   op_ret = read_op->iterate(this, ofs_x, end_x, filter, s->yield);
+  ldpp_dout(this, 20) << "AMIN: " << __func__  << __LINE__ <<  dendl;
 
   if (op_ret >= 0)
     op_ret = filter->flush();

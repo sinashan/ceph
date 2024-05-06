@@ -524,13 +524,15 @@ int D4NFilterObject::D4NFilterReadOp::prepare(optional_yield y, const DoutPrefix
 
   //the object is cached some where; local or remote.
   if (retDir == 0){
-    source->set_obj_size(object.size);
     ldpp_dout(dpp, 20) << "AMIN: D4NFilterObject:" << __func__ << ": " << __LINE__ << dendl;
     if (object.hostsList.size() > 0){
       cached_local = 2; 
       for (auto &it : object.hostsList){
 	if (it == localCache){
+          ldpp_dout(dpp, 20) << "AMIN: D4NFilterObject:" << __func__ << ": " << __LINE__ << dendl;
       	  cached_local = 1; //local
+    	  source->set_obj_size(object.size);
+          return 0;
 	}
       }
 
@@ -553,22 +555,25 @@ int D4NFilterObject::D4NFilterReadOp::prepare(optional_yield y, const DoutPrefix
   next->params.if_match = params.if_match;
   next->params.if_nomatch = params.if_nomatch;
   next->params.lastmod = params.lastmod;
-  int ret = next->prepare(y, dpp);
+  int ret = 0;
 
-  rgw::sal::Attrs attrs;
+  if (cached_local == 0){ //backend
+    ret = next->prepare(y, dpp);
 
-  if (source->driver->get_cache_driver()->get_attrs(dpp, source->get_key().get_oid(), attrs, y) < 0) {
-    ldpp_dout(dpp, 10) << "D4NFilterObject::D4NFilterReadOp::" << __func__ << "(): CacheDriver get_attrs method failed." << dendl;
-  } else {
-    /* Set metadata locally */
-    RGWObjState* astate;
-    RGWQuotaInfo quota_info;
-    std::unique_ptr<rgw::sal::User> user = source->driver->get_user(source->get_bucket()->get_owner());
-    source->get_obj_state(dpp, &astate, y);
+    rgw::sal::Attrs attrs;
 
-    for (auto& attr : attrs) {
-      if (attr.second.length() > 0) {
-	if (attr.first == "mtime") {
+    if (source->driver->get_cache_driver()->get_attrs(dpp, source->get_key().get_oid(), attrs, y) < 0) {
+      ldpp_dout(dpp, 10) << "D4NFilterObject::D4NFilterReadOp::" << __func__ << "(): CacheDriver get_attrs method failed." << dendl;
+    } else {
+      /* Set metadata locally */
+      RGWObjState* astate;
+      RGWQuotaInfo quota_info;
+      std::unique_ptr<rgw::sal::User> user = source->driver->get_user(source->get_bucket()->get_owner());
+      source->get_obj_state(dpp, &astate, y);
+
+     for (auto& attr : attrs) {
+       if (attr.second.length() > 0) {
+ 	if (attr.first == "mtime") {
 	  parse_time(attr.second.c_str(), &astate->mtime);
 	  attrs.erase(attr.first);
 	} else if (attr.first == "object_size") {
@@ -621,7 +626,8 @@ int D4NFilterObject::D4NFilterReadOp::prepare(optional_yield y, const DoutPrefix
         ldpp_dout(dpp, 20) << __func__ << "Failed to find id tag" << dendl;
       }
     }
-  } //end of else (retDir == 0)
+   }
+ } 
   return ret;
 }
 
