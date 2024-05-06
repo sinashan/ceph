@@ -489,7 +489,8 @@ int D4NFilterObject::D4NFilterReadOp::getRemote(const DoutPrefixProvider* dpp, s
   auto sender = new RGWRESTStreamRWRequest(dpp->get_cct(), "GET", remoteCacheAddress, &cb, NULL, NULL, "", host_style);
 
   //ret = sender->send_request(dpp, &accessKey, extra_headers, "admin/remoted4n/"+bucketName+"/"+key, nullptr, &out_bl);
-  ret = sender->send_request(dpp, &accessKey, extra_headers, "admin/swift/auth/"+bucketName+"/"+key, nullptr, &out_bl);                 
+  //ret = sender->send_request(dpp, &accessKey, extra_headers, "admin/swift/auth/"+bucketName+"/"+key, nullptr, &out_bl);                 
+  ret = sender->send_request(dpp, accessKey, extra_headers, source->get_obj(), nullptr);
   if (ret < 0) {                                                                                      
     delete sender;                                                                                       
     return ret;                                                                                       
@@ -943,31 +944,76 @@ int D4NFilterObject::D4NFilterReadOp::iterateRemote(const DoutPrefixProvider* dp
     }
 
     ceph::bufferlist bl;
-    std::string oid_in_cache = prefix + "_" + std::to_string(adjusted_start_ofs) + "_" + std::to_string(part_len);
+    received_data.begin(adjusted_start_ofs).copy(len_to_read, bl);
 
-    ldpp_dout(dpp, 20) << "D4NFilterObject::iterateRemote:: " << __func__ << "(): READ FROM CACHE: oid=" << oid_in_cache << " length to read is: " << len_to_read << " part num: " << start_part_num << 
-    " read_ofs: " << read_ofs << " part len: " << part_len << dendl;
+    cb->handle_data(received_data, adjusted_start_ofs, len_to_read);
 
-    /*
-    std::string key = oid_in_cache;
 
-    if (dirty == true) 
-      key = "D_" + oid_in_cache;
+    rgw::d4n::CacheBlock block, existing_block;
+    rgw::d4n::BlockDirectory* blockDir = source->driver->get_block_dir();
 
-    ret = getRemote(dpp, key, cacheLocation, y);
-    if (ret < 0){
-      ldpp_dout(dpp, 20) << "D4NFilterObject: " << __func__ << "(): Fetching block from Remote Failed. Key is: " << key << dendl;
-      return ret;
-    }
-    
-    ret = remoteFlush(dpp, adjusted_start_ofs, part_len, cb, y);
-    if (ret < 0){
-      ldpp_dout(dpp, 20) << "D4NFilterObject: " << __func__ << "(): Flushing block from Remote Failed. Key is: " << key << dendl;
-      return ret;
-    }
-    */
+    block.hostsList.push_back(blockDir->cct->_conf->rgw_local_cache_address); 
+    block.cacheObj.objName = source->get_key().get_oid();
+    block.cacheObj.bucketName = source->get_bucket()->get_name();
+    //std::stringstream s;
 
-    cb->handle_data(received_data, read_ofs, len_to_read);
+    bool dirty = false;
+    time_t creationTime = std::stol(object.creationTime);
+    block.cacheObj.creationTime = creationTime;
+    block.cacheObj.dirty = dirty;
+
+
+    //populating fields needed for building directory index
+    existing_block.cacheObj.objName = block.cacheObj.objName;
+    existing_block.cacheObj.bucketName = block.cacheObj.bucketName;
+
+    Attrs attrs = object.attrs; 
+ 
+    ldpp_dout(dpp, 20) << __func__ << ": version stored in update method is: " << version << dendl;
+
+    std::string oid = prefix + "_" + std::to_string(adjusted_start_ofs) + "_" + std::to_string(part_len);
+
+    ldpp_dout(dpp, 20) << "D4NFilterObject::iterateRemote:: " << __func__ << "(): READ FROM CACHE: oid=" << oid << " length to read is: " << len_to_read << " part num: " << start_part_num << 
+    " adjusted_start_ofs: " << adjusted_start_ofs << " part len: " << part_len << dendl;
+
+      if (!source->driver->get_policy_driver()->get_cache_policy()->exist_key(oid)) {
+        block.blockID = adjusted_start_ofs;
+        block.size = part_len;
+        block.version = version;
+        block.dirty = false; //Reading from the backend, data is clean
+        auto ret = source->driver->get_policy_driver()->get_cache_policy()->eviction(dpp, block.size, y);
+        if (ret == 0) {
+          ret = source->driver->get_cache_driver()->put(dpp, oid, bl, len_to_read, attrs, y);
+          if (ret == 0) {
+  	    std::string objEtag = "";
+ 	    source->driver->get_policy_driver()->get_cache_policy()->update(dpp, oid, adjusted_start_ofs, len_to_read, version, dirty, creationTime,  source->get_bucket()->get_owner(), y);
+
+            if (start_part_num == (num_parts - 1)) //last part
+	      source->driver->get_policy_driver()->get_cache_policy()->updateObj(dpp, prefix, version, dirty, source->get_obj_size(), creationTime, source->get_bucket()->get_owner(), objEtag, y);
+
+            if (!blockDir->exist_key(&block, y)) {
+              if (blockDir->set(&block, y) < 0) //should we revert previous steps if this step fails?
+		ldpp_dout(dpp, 10) << "D4NFilterObject::D4NFilterReadOp::D4NFilterGetCB::" << __func__ << "(): BlockDirectory set method failed." << dendl;
+            } else {
+              existing_block.blockID = block.blockID;
+              existing_block.size = block.size;
+              if (blockDir->get(&existing_block, y) < 0) {
+                ldpp_dout(dpp, 10) << "Failed to fetch existing block for: " << existing_block.cacheObj.objName << " blockID: " << existing_block.blockID << " block size: " << existing_block.size << dendl;
+              } else {
+                if (blockDir->update_field(&block, "blockHosts", blockDir->cct->_conf->rgw_local_cache_address, y) < 0)
+                  ldpp_dout(dpp, 10) << "D4NFilterObject::D4NFilterReadOp::D4NFilterGetCB::" << __func__ << "(): BlockDirectory update_field method failed for hostsList." << dendl;
+              }
+	    }
+            if (start_part_num == (num_parts - 1)){ //last part
+              if (source->driver->get_obj_dir()->update_field(&object, "objHosts", blockDir->cct->_conf->rgw_local_cache_address, y) < 0)
+                ldpp_dout(dpp, 10) << "D4NFilterObject::D4NFilterReadOp::D4NFilterGetCB::" << __func__ << "(): objectDirectory update_field method failed for hostsList." << dendl;
+            }
+          } else {
+	      ldpp_dout(dpp, 0) << "D4NFilterObject::D4NFilterReadOp::D4NFilterGetCB::" << __func__ << "(): put() to cache backend failed with error: " << ret << dendl;
+          }
+        }
+      }
+
 
     if (start_part_num != (num_parts - 1)) {
       adjusted_start_ofs += obj_max_req_size;
