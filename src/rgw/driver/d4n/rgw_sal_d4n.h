@@ -153,13 +153,14 @@ class D4NFilterObject : public FilterObject {
           cb = std::make_unique<D4NFilterGetCB>(source->driver, source);
 	}
 	virtual ~D4NFilterReadOp() = default;
-	int remoteFlush(const DoutPrefixProvider* dpp, int64_t ofs, int64_t end, RGWGetDataCB* cb, optional_yield y);
 	int getRemote(const DoutPrefixProvider* dpp, std::string key, std::string remoteCacheAddress, optional_yield y);
 	virtual int prepare(optional_yield y, const DoutPrefixProvider* dpp) override;
 	virtual int iterate(const DoutPrefixProvider* dpp, int64_t ofs, int64_t end,
 	  RGWGetDataCB* cb, optional_yield y) override;
 	int iterateRemote(const DoutPrefixProvider* dpp, int64_t ofs, int64_t end,
                         RGWGetDataCB* cb, optional_yield y); 
+	int iterateLSVD(const DoutPrefixProvider* dpp, int64_t ofs, int64_t end,
+                        RGWGetDataCB* cb, optional_yield y);
 	virtual int get_attr(const DoutPrefixProvider* dpp, const char* name, bufferlist& dest, optional_yield y) override;
 
       private:
@@ -173,8 +174,11 @@ class D4NFilterObject : public FilterObject {
         std::unordered_map<uint64_t, std::pair<uint64_t,uint64_t>> blocks_info;
 
 	int flush(const DoutPrefixProvider* dpp, rgw::AioResultList&& results, optional_yield y);
+	int lsvdFlush(const DoutPrefixProvider* dpp, rgw::AioResultList&& results, optional_yield y);
+	int remoteFlush(const DoutPrefixProvider* dpp, int64_t ofs, int64_t end, RGWGetDataCB* cb, optional_yield y);
 	void cancel();
 	int drain(const DoutPrefixProvider* dpp, optional_yield y);
+	int lsvdDrain(const DoutPrefixProvider* dpp, optional_yield y);
     };
 
     struct D4NFilterDeleteOp : FilterDeleteOp {

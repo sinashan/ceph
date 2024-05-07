@@ -4117,3 +4117,51 @@ options:
   flags:
   - startup
   with_legacy: true
+- name: rgw_d4n_lsvd_cache_address
+  type: str
+  level: advanced
+  desc: The LSVD server address used by D4N cache 
+  default: 127.0.0.1:8000
+  services: 
+  - rgw
+  with_legacy: true
+- name: rgw_d4n_lsvd_datacache_persistent_path
+  type: str
+  level: advanced
+  desc: The LSVD cache partition
+  default: /tmp/cache-lsvd/
+  services: 
+  - rgw
+  with_legacy: true
+- name: rgw_d4n_lsvd_cache_enabled
+  type: bool
+  level: advanced
+  desc: LSVD cache on this server is enabled
+  default: false
+  services: 
+  - rgw
+  with_legacy: true
+- name: rgw_d4n_lsvd_use_enabled
+  type: bool
+  level: advanced
+  desc: LSVD service can be used for small objects
+  default: false
+  services: 
+  - rgw
+  with_legacy: true
+- name: rgw_d4n_small_object_threshold
+  type: int
+  level: advanced
+  desc: The threshold in Bytes to decide if a data should be written to LSVD or not
+  default: 1048576
+  services: 
+  - rgw
+  with_legacy: true
+- name: rgw_d4n_lsvd_datacache_size
+  type: size
+  level: advanced
+  desc: The threshold in Bytes to decide if a data should be written to LSVD or not
+  default: 1_G
+  services: 
+  - rgw
+  with_legacy: true
