@@ -910,13 +910,11 @@ int D4NFilterObject::D4NFilterReadOp::iterateLSVD(const DoutPrefixProvider* dpp,
 
   ldpp_dout(dpp, 20) << __func__ << " ofs: " << ofs << " len: " << len << dendl;
 
-  std::string oid_in_cache = prefix + "_" + std::to_string(ofs) + "_" + std::to_string(len);
-
-  auto completed = source->driver->get_lsvd_cache_driver()->get_async(dpp, y, aio.get(), oid_in_cache, ofs, len, 0, 0); 
+  auto completed = source->driver->get_lsvd_cache_driver()->get_async(dpp, y, aio.get(), prefix, ofs, len, 0, 0); 
 
   //this->blocks_info.insert(std::make_pair(id, std::make_pair(adjusted_start_ofs, part_len)));
 
-  ldpp_dout(dpp, 20) << "D4NFilterObject::iterateLSVD:: " << __func__ << "(): Info: flushing data for oid: " << oid_in_cache << dendl;
+  ldpp_dout(dpp, 20) << "D4NFilterObject::iterateLSVD:: " << __func__ << "(): Info: flushing data for oid: " << prefix << dendl;
   auto r = lsvdFlush(dpp, std::move(completed), y);
 
   if (r < 0) {
