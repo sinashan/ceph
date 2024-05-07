@@ -19,13 +19,6 @@ namespace rgw { namespace d4n {
 namespace asio = boost::asio;
 namespace sys = boost::system;
 
-class RGWRemoteD4NGetCB : public RGWHTTPStreamRWRequest::ReceiveCB {                                     
-public:
-  bufferlist *in_bl;                                                                                  
-  RGWRemoteD4NGetCB(bufferlist* _bl): in_bl(_bl) {}
-  int handle_data(bufferlist& bl, bool *pause) override;                                              
-}; 
-
 
 class CachePolicy {
   protected:

@@ -43,6 +43,17 @@ namespace rgw { namespace sal {
 
 using boost::redis::connection;  
 
+class RGWRemoteD4NGetCB : public RGWHTTPStreamRWRequest::ReceiveCB {
+public:
+  bufferlist *in_bl;                                  
+  RGWRemoteD4NGetCB(bufferlist* _bl): in_bl(_bl) {}
+  int handle_data(bufferlist& bl, bool *pause) override {
+    this->in_bl->append(bl);
+    return 0;
+  }
+}; 
+
+
 
 class D4NFilterDriver : public FilterDriver {
   private:
@@ -244,6 +255,10 @@ class D4NFilterWriter : public FilterWriter {
     bool d4n_writecache;
     time_t startTime;
     std::string objVersion;
+    bool lsvd_cache_enabled = false; //local lsvd cache
+    bool lsvd_cache_used = false; //lsvd service
+    int lsvd_counter = 0; //how many blocks the object is
+
 
   public:
     D4NFilterWriter(std::unique_ptr<Writer> _next, D4NFilterDriver* _driver, Object* _obj, 
@@ -268,6 +283,7 @@ class D4NFilterWriter : public FilterWriter {
                        const req_context& rctx,
                        uint32_t flags) override;
    bool is_atomic() { return atomic; };
+   int sendRemote(const DoutPrefixProvider* dpp, rgw::d4n::CacheObj *object, std::string remoteCacheAddress, std::string key, bufferlist* out_bl, optional_yield y);
    const DoutPrefixProvider* dpp() { return save_dpp; } 
 };
 

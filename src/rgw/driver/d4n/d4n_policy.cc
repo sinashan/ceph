@@ -47,11 +47,13 @@ void redis_exec(std::shared_ptr<connection> conn,
   }
 }
 
+/*
 int RGWRemoteD4NGetCB::handle_data(bufferlist& bl, bool *pause)                                          
 {     
   this->in_bl->append(bl);
   return 0;                                                                                         
 } 
+*/
 
 
 int LFUDAPolicy::init(CephContext *cct, const DoutPrefixProvider* dpp, asio::io_context& io_context, rgw::sal::Driver *_driver) {
@@ -330,7 +332,7 @@ int LFUDAPolicy::exist_key(std::string key) {
 int LFUDAPolicy::sendRemote(const DoutPrefixProvider* dpp, CacheBlock *victim, std::string remoteCacheAddress, std::string key, bufferlist* out_bl, optional_yield y)
 {
   bufferlist in_bl;
-  RGWRemoteD4NGetCB cb(&in_bl);
+  rgw::sal::RGWRemoteD4NGetCB cb(&in_bl);
   std::string bucketName = victim->cacheObj.bucketName;
   ldpp_dout(dpp, 20) << " AMIN: " << __func__ << " : " << __LINE__ << ": bucket name is: " << bucketName << dendl;                          
  

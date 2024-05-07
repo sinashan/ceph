@@ -503,12 +503,8 @@ int D4NFilterObject::D4NFilterReadOp::prepare(optional_yield y, const DoutPrefix
 	  }
 	  else{
             ldpp_dout(dpp, 20) << "AMIN: D4NFilterObject:" << __func__ << ": " << __LINE__ << dendl;
-	    if (g_conf()->rgw_d4n_lsvd_use_enabled == true){ //if we have a LSVD server somewhere
-              cacheLocation = g_conf()->rgw_d4n_lsvd_cache_address;
-	      if (cacheLocation == localCache)
+	    if (g_conf()->rgw_d4n_lsvd_cache_enabled == true){ //if we have a LSVD cache
       	        cached_local = 2; //local_lsvd
-	      else 
-	        cached_local = 1;
 	    }
 	    else{
 	      cached_local = 1;
@@ -1538,6 +1534,50 @@ int D4NFilterObject::D4NFilterDeleteOp::delete_obj(const DoutPrefixProvider* dpp
   return next->delete_obj(dpp, y, flags);
 }
 
+int D4NFilterWriter::sendRemote(const DoutPrefixProvider* dpp, rgw::d4n::CacheObj *object, std::string remoteCacheAddress, std::string key, bufferlist* out_bl, optional_yield y)
+{
+  bufferlist in_bl;
+  RGWRemoteD4NGetCB cb(&in_bl);
+  std::string bucketName = object->bucketName;
+ 
+  RGWAccessKey accessKey;
+  std::string findKey;
+  
+  auto user = obj->get_bucket()->get_owner();
+  std::unique_ptr<rgw::sal::User> c_user = driver->get_user(user);
+  int ret = c_user->load_user(dpp, y);
+  if (ret < 0) {
+    return -EPERM;
+  }
+
+  if (c_user->get_info().access_keys.empty()) {
+    return -EINVAL;
+  }
+
+  accessKey.id = c_user->get_info().access_keys.begin()->second.id;
+  accessKey.key = c_user->get_info().access_keys.begin()->second.key;
+
+  HostStyle host_style = PathStyle;
+  std::map<std::string, std::string> extra_headers;                                                            
+
+  auto sender = new RGWRESTStreamRWRequest(dpp->get_cct(), "PUT", remoteCacheAddress, &cb, NULL, NULL, "", host_style);
+
+  ret = sender->send_request(dpp, accessKey, extra_headers, obj->get_obj(), nullptr);
+  if (ret < 0) {                                                                                      
+    delete sender;                                                                                       
+    return ret;                                                                                       
+  }                                                                                                   
+  
+  ret = sender->complete_request(y);                                                            
+  if (ret < 0){
+    delete sender;                                                                                   
+    return ret;                                                                                   
+  }
+
+  return 0;
+}	
+
+
 
 int D4NFilterWriter::prepare(optional_yield y) 
 {
@@ -1546,7 +1586,10 @@ int D4NFilterWriter::prepare(optional_yield y)
   if (driver->get_cache_driver()->delete_data(save_dpp, obj->get_key().get_oid(), y) < 0) 
     ldpp_dout(save_dpp, 10) << "D4NFilterWriter::" << __func__ << "(): CacheDriver delete_data method failed." << dendl;
   d4n_writecache = g_conf()->d4n_writecache_enabled;
-  if (d4n_writecache == false){
+  lsvd_cache_enabled = g_conf()->rgw_d4n_lsvd_cache_enabled;
+  lsvd_cache_used = g_conf()->rgw_d4n_lsvd_use_enabled;
+  lsvd_counter = 0;
+  if (d4n_writecache == false){ //lsvd cache is also a part of write procedure
     ldpp_dout(save_dpp, 10) << "D4NFilterObject::D4NFilterWriteOp::" << __func__ << "(): calling next iterate" << dendl;
     return next->prepare(y);
   }
@@ -1556,6 +1599,7 @@ int D4NFilterWriter::prepare(optional_yield y)
 
 int D4NFilterWriter::process(bufferlist&& data, uint64_t offset)
 {
+    lsvd_counter += 1;
     bufferlist bl = data;
     off_t bl_len = bl.length();
     off_t ofs = offset;
@@ -1572,6 +1616,7 @@ int D4NFilterWriter::process(bufferlist&& data, uint64_t offset)
 
     ldpp_dout(save_dpp, 20) << "AMIN: " << __func__ << "(): prefix: "  << prefix << dendl;
     rgw::d4n::BlockDirectory* blockDir = driver->get_block_dir();
+    rgw::d4n::ObjectDirectory* objectDir = driver->get_obj_dir();
 
     block.cacheObj.bucketName = obj->get_bucket()->get_name();
     block.cacheObj.objName = obj->get_key().get_oid();
@@ -1584,45 +1629,96 @@ int D4NFilterWriter::process(bufferlist&& data, uint64_t offset)
     int ret = 0;
 
     if (d4n_writecache == false){
-
-      /*	
-      std::string oid = prefix + "_" + std::to_string(ofs)+ "_" + std::to_string(bl_len);
-      block.size = bl.length();
-      block.blockID = ofs;
-      block.dirty = false; //writing to the backend, hence the data is clean
-      block.hostsList.push_back(blockDir->cct->_conf->rgw_d4n_backend_address);	
-      ldpp_dout(save_dpp, 10) << "D4NFilterObject::D4NFilterWriteOp::" << __func__ << "(): calling next process" << dendl;
-      */
-
       ret = next->process(std::move(data), offset);
-      /*
-      if (ret == 0){
-        if (!blockDir->exist_key(&block, y)) {
-          if (blockDir->set(&block, y) < 0) 
-            ldpp_dout(save_dpp, 10) << "D4NFilterObject::D4NFilterWriteOp::" << __func__ << "(): BlockDirectory set method failed." << dendl;
-          } else {
-            existing_block.blockID = block.blockID;
-            existing_block.size = block.size;
-            if (blockDir->get(&existing_block, y) < 0) {
-              ldpp_dout(save_dpp, 10) << "Failed to fetch existing block for: " << existing_block.cacheObj.objName << " blockID: " << existing_block.blockID << " block size: " << existing_block.size << dendl;
-            } else {
-              if (existing_block.version != block.version) {
-                if (blockDir->del(&existing_block, y) < 0) //delete existing block
-                  ldpp_dout(save_dpp, 10) << "D4NFilterObject::D4NFilterWriteOp::" << __func__ << "(): BlockDirectory del method failed." << dendl;
-                if (blockDir->set(&block, y) < 0) //new versioned block will have new version, hostsList etc, how about globalWeight?
-                  ldpp_dout(save_dpp, 10) << "D4NFilterObject::D4NFilterWriteOp::" << __func__ << "(): BlockDirectory set method failed." << dendl;
-              } else {
-            if (blockDir->update_field(&block, "blockHosts", blockDir->cct->_conf->rgw_local_cache_address, y) < 0)
-              ldpp_dout(save_dpp, 10) << "D4NFilterObject::D4NFilterWriteOp::" << __func__ << "(): BlockDirectory update_field method failed for hostsList." << dendl;
-            }
-          }
-        }
-      } else{*/
       if (ret < 0){
           ldpp_dout(save_dpp, 1) << "D4NFilterObject::D4NFilterWriteOp::process" << __func__ << "(): ERROR: writting data to the backend failed!" << dendl;
 	  return ret;
       }
-    } else {
+    }
+    else if (lsvd_cache_enabled){//local lsvd cache
+      if (lsvd_counter == 1 && bl.length() < g_conf()->rgw_d4n_small_object_threshold){ //small object
+    	rgw::d4n::CacheObj object, existing_object;
+        object.bucketName = obj->get_bucket()->get_name();
+        object.objName = obj->get_key().get_oid();
+        std::string oid = prefix;
+        object.size = bl.length();
+	object.in_lsvd = true;
+	object.version = objVersion;
+	object.creationTime = creationTime;
+        object.hostsList.push_back(blockDir->cct->_conf->rgw_local_cache_address);
+	if (bl.length() > 0) {          
+          ret = driver->get_lsvd_cache_driver()->put(save_dpp, prefix, bl, bl.length(), obj->get_attrs(), y);
+          if (ret == 0) {
+            if (!objectDir->exist_key(&object, y)) {
+              if (objectDir->set(&object, y) < 0)
+  	        ldpp_dout(save_dpp, 10) << "D4NFilterObject::D4NFilterWriteOp::" << __func__ << "(): objectDirectory set method failed." << dendl;
+            } else {
+              existing_object.bucketName = obj->get_bucket()->get_name();
+              existing_object.objName = obj->get_key().get_oid();
+              if (objectDir->get(&existing_object, y) < 0) {
+                ldpp_dout(save_dpp, 10) << "Failed to fetch existing object for: " << existing_object.objName << dendl;
+              } else {
+                if (existing_object.version != object.version) {
+                  if (objectDir->del(&existing_object, y) < 0)
+                    ldpp_dout(save_dpp, 10) << "D4NFilterObject::D4NFilterWriteOp::" << __func__ << "(): objectDirectory del method failed." << dendl;
+                  if (objectDir->set(&object, y) < 0) //new versioned block will have new version, hostsList etc, how about globalWeight?
+                    ldpp_dout(save_dpp, 10) << "D4NFilterObject::D4NFilterWriteOp::" << __func__ << "(): objectDirectory set method failed." << dendl;
+                } else {
+                  if (objectDir->update_field(&object, "objHosts", blockDir->cct->_conf->rgw_local_cache_address, y) < 0)
+                    ldpp_dout(save_dpp, 10) << "D4NFilterObject::D4NFilterWriteOp::" << __func__ << "(): objectDirectory update_field method failed for hostsList." << dendl;
+                }
+              }
+	    }
+          } else {
+            ldpp_dout(save_dpp, 1) << "D4NFilterObject::D4NFilterWriteOp::process" << __func__ << "(): ERROR: writting data to the local LSVD cache failed!" << dendl;
+	    return ret;
+	  }
+	}
+      }
+    }
+    else if (lsvd_cache_used){//remote lsvd
+      if (lsvd_counter == 1 && bl.length() < g_conf()->rgw_d4n_small_object_threshold){ //small object
+    	rgw::d4n::CacheObj object, existing_object;
+        object.bucketName = obj->get_bucket()->get_name();
+        object.objName = obj->get_key().get_oid();
+        std::string oid = prefix;
+        object.size = bl.length();
+	object.in_lsvd = true;
+	object.version = objVersion;
+	object.creationTime = creationTime;
+	bufferlist out_bl;
+        object.hostsList.push_back(blockDir->cct->_conf->rgw_local_cache_address);
+	if (bl.length() > 0) {          
+	  ret = sendRemote(save_dpp, &object, blockDir->cct->_conf->rgw_d4n_lsvd_cache_address, oid, &out_bl, y);
+          if (ret == 0) {
+            if (!objectDir->exist_key(&object, y)) {
+              if (objectDir->set(&object, y) < 0)
+  	        ldpp_dout(save_dpp, 10) << "D4NFilterObject::D4NFilterWriteOp::" << __func__ << "(): objectDirectory set method failed." << dendl;
+            } else {
+              existing_object.bucketName = obj->get_bucket()->get_name();
+              existing_object.objName = obj->get_key().get_oid();
+              if (objectDir->get(&existing_object, y) < 0) {
+                ldpp_dout(save_dpp, 10) << "Failed to fetch existing object for: " << existing_object.objName << dendl;
+              } else {
+                if (existing_object.version != object.version) {
+                  if (objectDir->del(&existing_object, y) < 0)
+                    ldpp_dout(save_dpp, 10) << "D4NFilterObject::D4NFilterWriteOp::" << __func__ << "(): objectDirectory del method failed." << dendl;
+                  if (objectDir->set(&object, y) < 0) //new versioned block will have new version, hostsList etc, how about globalWeight?
+                    ldpp_dout(save_dpp, 10) << "D4NFilterObject::D4NFilterWriteOp::" << __func__ << "(): objectDirectory set method failed." << dendl;
+                } else {
+                  if (objectDir->update_field(&object, "objHosts", blockDir->cct->_conf->rgw_d4n_lsvd_cache_address, y) < 0)
+                    ldpp_dout(save_dpp, 10) << "D4NFilterObject::D4NFilterWriteOp::" << __func__ << "(): objectDirectory update_field method failed for hostsList." << dendl;
+                }
+              }
+	    }
+          } else {
+            ldpp_dout(save_dpp, 1) << "D4NFilterObject::D4NFilterWriteOp::process" << __func__ << "(): ERROR: writting data to the remote LSVD cache failed!" << dendl;
+	    return ret;
+	  }
+	}
+      }
+    }
+    else { //local write cache
       std::string oid = prefix + "_" + std::to_string(ofs);
       std::string key = "D_" + oid + "_" + std::to_string(bl_len);
       std::string oid_in_cache = oid + "_" + std::to_string(bl_len);
