@@ -1651,6 +1651,14 @@ int D4NFilterWriter::process(bufferlist&& data, uint64_t offset)
 	object.version = objVersion;
 	object.creationTime = creationTime;
         object.hostsList.push_back(blockDir->cct->_conf->rgw_local_cache_address);
+
+        RGWAccessControlPolicy acl = obj->get_acl();
+        bufferlist bl_attr;
+        acl.encode(bl_attr);
+        rgw::sal::Attrs obj_attrs; 
+        obj_attrs[RGW_ATTR_ACL] = std::move(bl_attr);
+        object.attrs = obj_attrs;
+
 	if (bl.length() > 0) {          
           ret = driver->get_lsvd_cache_driver()->put(save_dpp, prefix, bl, bl.length(), obj->get_attrs(), y);
           if (ret == 0) {
@@ -1696,6 +1704,14 @@ int D4NFilterWriter::process(bufferlist&& data, uint64_t offset)
 	object.creationTime = creationTime;
 	bufferlist out_bl;
         object.hostsList.push_back(blockDir->cct->_conf->rgw_local_cache_address);
+
+        RGWAccessControlPolicy acl = obj->get_acl();
+        bufferlist bl_attr;
+        acl.encode(bl_attr);
+        rgw::sal::Attrs obj_attrs; 
+        obj_attrs[RGW_ATTR_ACL] = std::move(bl_attr);
+        object.attrs = obj_attrs;
+
 	if (bl.length() > 0) {          
 	  ret = sendRemote(save_dpp, &object, blockDir->cct->_conf->rgw_d4n_lsvd_cache_address, oid, &out_bl, y);
           if (ret == 0) {
