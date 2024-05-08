@@ -1647,7 +1647,7 @@ int D4NFilterWriter::process(bufferlist&& data, uint64_t offset)
         object.size = bl.length();
 	object.in_lsvd = true;
 	object.version = objVersion;
-	object.creationTime = creationTime;
+	object.creationTime = std::to_string(creationTime);
         object.hostsList.push_back(blockDir->cct->_conf->rgw_local_cache_address);
 
         RGWAccessControlPolicy acl = obj->get_acl();
@@ -1699,7 +1699,7 @@ int D4NFilterWriter::process(bufferlist&& data, uint64_t offset)
         object.size = bl.length();
 	object.in_lsvd = true;
 	object.version = objVersion;
-	object.creationTime = creationTime;
+	object.creationTime = std::to_string(creationTime);
 	bufferlist out_bl;
         object.hostsList.push_back(blockDir->cct->_conf->rgw_local_cache_address);
 
@@ -1827,7 +1827,7 @@ int D4NFilterWriter::complete(size_t accounted_size, const std::string& etag,
     ldpp_dout(save_dpp, 10) << "Amin: D4NFilterWriter::" << __func__ << "()" << dendl;
 
     hostsList = { driver->get_block_dir()->cct->_conf->rgw_local_cache_address };
-    if (lsvd_cache_enabled == false && lsvd_cache_used == false) { 
+    if ((lsvd_cache_enabled == false && lsvd_cache_used == false) || (accounted_size >= g_conf()->rgw_d4n_small_object_threshold)) { 
       rgw::d4n::CacheObj object = rgw::d4n::CacheObj{
 		 .objName = obj->get_key().get_oid(), 
 		 .bucketName = obj->get_bucket()->get_name(),
