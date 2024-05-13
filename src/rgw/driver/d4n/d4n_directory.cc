@@ -228,7 +228,6 @@ int ObjectDirectory::get_attr(const DoutPrefixProvider* dpp, CacheObj* object, c
     return -ENOENT;
   }
 
-  ldpp_dout(dpp, 20) << "AMIN: ObjectDirectory: " << __func__ << __LINE__ << " attr is: " << name << " value is: " << dest << dendl;
   return 0;
 }
 

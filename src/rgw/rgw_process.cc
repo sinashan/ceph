@@ -195,7 +195,6 @@ int rgw_process_authenticated(RGWHandler_REST * const handler,
   
   ldpp_dout(op, 2) << "reading permissions" << dendl;
   ret = handler->read_permissions(op, y);
-  ldpp_dout(op, 20) << "AMIN: " << __func__  << __LINE__ << "ret is " << ret << dendl;
   if (ret < 0) {
     return ret;
   }
@@ -308,9 +307,6 @@ int process_request(const RGWProcessEnv& penv,
 
   ldpp_dout(s, 2) << "initializing for trans_id = " << s->trans_id << dendl;
 
-  ldpp_dout(s, 1) << "AMIN: " << __func__ << ": " << __LINE__ << ": reuqest_uri is: " << s->info.request_uri << dendl;
-  ldpp_dout(s, 1) << "AMIN: " << __func__ << ": " << __LINE__ << ": driver is: " << driver->get_name() << dendl;
-  ldpp_dout(s, 1) << "AMIN: " << __func__ << ": " << __LINE__ << ": frontedn_prefix is: " << frontend_prefix << dendl;
   RGWOp* op = nullptr;
   int init_error = 0;
   bool should_log = false;

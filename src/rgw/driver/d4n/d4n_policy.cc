@@ -62,12 +62,10 @@ int LFUDAPolicy::init(CephContext *cct, const DoutPrefixProvider* dpp, asio::io_
   int result = 0;
   response<int, int, int, int> resp;
 
-  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
   /* Spawn write cache cleaning thread */
   if (dpp->get_cct()->_conf->d4n_writecache_enabled == true){
     tc = std::thread(&CachePolicy::cleaning, this, dpp);
     tc.detach();
-    ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
   }
 
   try {
@@ -78,59 +76,45 @@ int LFUDAPolicy::init(CephContext *cct, const DoutPrefixProvider* dpp, asio::io_
     req.push("HSET", "lfuda", "minLocalWeights_size", std::to_string(entries_map.size()));
     req.push("HSET", "lfuda", "minLocalWeights_address", dpp->get_cct()->_conf->rgw_local_cache_address);
   
-  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
     redis_exec(conn, ec, req, resp, y);
-  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
 
     if (ec) {
       ldpp_dout(dpp, 10) << "LFUDAPolicy::" << __func__ << "() ERROR: " << ec.what() << dendl;
       return -ec.value();
     }
-  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
 
     result = std::min(std::get<1>(resp).value(), std::min(std::get<2>(resp).value(), std::get<3>(resp).value()));
-  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
   } catch (std::exception &e) {
     ldpp_dout(dpp, 10) << "LFUDAPolicy::" << __func__ << "() ERROR: " << e.what() << dendl;
-  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
     return -EINVAL;
   }
 
-  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
   if (!std::get<0>(resp).value()) { /* Only set maximum age if it doesn't exist */
     try {
-  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
       boost::system::error_code ec;
       response<int> value;
       request req;
       req.push("HSET", "lfuda", "age", age);
-  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
     
       redis_exec(conn, ec, req, value, y);
-  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
 
       if (ec) {
 	ldpp_dout(dpp, 10) << "LFUDAPolicy::" << __func__ << "() ERROR: " << ec.what() << dendl;
 	return -ec.value();
       }
-  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
 
       result = std::min(result, std::get<0>(value).value());
-  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
     } catch (std::exception &e) {
       ldpp_dout(dpp, 10) << "LFUDAPolicy::" << __func__ << "() ERROR: " << e.what() << dendl;
-  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
       return -EINVAL;
     }
   }
-  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
 
   /* Spawn redis sync thread */
   asio::co_spawn(io_context.get_executor(),
 		   redis_sync(dpp, y), asio::detached);
 
 
-  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
   return result;
 }
 
@@ -334,7 +318,6 @@ int LFUDAPolicy::sendRemote(const DoutPrefixProvider* dpp, CacheBlock *victim, s
   bufferlist in_bl;
   rgw::sal::RGWRemoteD4NGetCB cb(&in_bl);
   std::string bucketName = victim->cacheObj.bucketName;
-  ldpp_dout(dpp, 20) << " AMIN: " << __func__ << " : " << __LINE__ << ": bucket name is: " << bucketName << dendl;                          
  
   RGWAccessKey accessKey;
   std::string findKey;
@@ -374,7 +357,6 @@ int LFUDAPolicy::sendRemote(const DoutPrefixProvider* dpp, CacheBlock *victim, s
     return ret;                                                                                       
   }                                                                                                   
   
-  ldpp_dout(dpp, 20) << " AMIN: " << __func__ << " : " << __LINE__ << dendl;                          
   ret = sender->complete_request(y);                                                            
   if (ret < 0){
     delete sender;                                                                                   
@@ -597,7 +579,6 @@ void LFUDAPolicy::cleaning(const DoutPrefixProvider* dpp)
 
     for (auto it = o_entries_map.begin(); it != o_entries_map.end(); it++){
       if ((it->second->dirty == true) && (std::difftime(time(NULL), it->second->creationTime) > interval)){ //if block is dirty and written more than interval seconds ago
-  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
 	name = it->first;
 	rgw_user c_rgw_user = it->second->user;
 
@@ -625,13 +606,11 @@ void LFUDAPolicy::cleaning(const DoutPrefixProvider* dpp)
 	c_bucketinfo.owner = c_rgw_user;
 	
 	
-  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
     	int ret = driver->load_bucket(dpp, c_rgw_bucket, &c_bucket, null_yield);
 	if (ret < 0) {
       	  ldpp_dout(dpp, 10) << __func__ << "(): load_bucket() returned ret=" << ret << dendl;
       	  break;
         }
-  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
 
 	std::unique_ptr<rgw::sal::Object> c_obj = c_bucket->get_object(c_obj_key);
 
@@ -648,7 +627,6 @@ void LFUDAPolicy::cleaning(const DoutPrefixProvider* dpp)
     	  ldpp_dout(dpp, 20) << "processor->prepare() returned ret=" << op_ret << dendl;
     	  break;
   	}
-  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
 
 	std::string prefix = b_name+"_"+key;
 	off_t lst = it->second->size;
@@ -670,11 +648,9 @@ void LFUDAPolicy::cleaning(const DoutPrefixProvider* dpp)
     	  len = data.length();
     	  fst += len;
 
-  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
     	  if (len == 0) {
       	    break;
    	  }
-  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
 
     	  ceph::bufferlist dataCP = data;
     	  op_ret = filter->process(std::move(data), ofs);
@@ -684,7 +660,6 @@ void LFUDAPolicy::cleaning(const DoutPrefixProvider* dpp)
       	    return;
     	  }
 	  
-  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
 
   	  rgw::d4n::CacheBlock block;
     	  block.cacheObj.bucketName = c_obj->get_bucket()->get_name();
@@ -696,7 +671,6 @@ void LFUDAPolicy::cleaning(const DoutPrefixProvider* dpp)
       	    ldpp_dout(dpp, 20) << "updating dirty flag in Block directory failed!" << dendl;
       	    return;
     	  }
-  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << ": data is: " << dataCP.to_str() << dendl;
 
 	  //FIXME: AMIN: this is for testing remote cache.
 	  //comment or remove it afterwards
@@ -707,10 +681,8 @@ void LFUDAPolicy::cleaning(const DoutPrefixProvider* dpp)
 	  }
 	  */
 	  
-  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
 
     	  cacheDriver->rename(dpp, oid_in_cache, new_oid_in_cache, null_yield);
-  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
 
     	  ofs += len;
   	} while (len > 0);

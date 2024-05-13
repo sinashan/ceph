@@ -7298,6 +7298,7 @@ int RGWRados::iterate_obj(const DoutPrefixProvider *dpp, RGWObjectCtx& obj_ctx,
   RGWObjState *astate = NULL;
   RGWObjManifest *manifest = nullptr;
 
+
   obj_to_raw(bucket_info.placement_rule, obj, &head_obj);
 
   int r = get_obj_state(dpp, &obj_ctx, bucket_info, obj, &astate, &manifest, false, y);
@@ -7305,10 +7306,12 @@ int RGWRados::iterate_obj(const DoutPrefixProvider *dpp, RGWObjectCtx& obj_ctx,
     return r;
   }
 
+
   if (end < 0)
     len = 0;
   else
     len = end - ofs + 1;
+
 
   if (manifest) {
     /* now get the relevant object stripe */

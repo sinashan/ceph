@@ -41,7 +41,6 @@ static inline std::vector<std::string> get_remoted4n_objectInfo(req_state *s, ch
   string key;
   if (!rgw::sal::Object::empty(s->object.get())){
     key = s->object->get_name();
-    ldpp_dout(s, 20) << "AMIN: " << __func__ << ": " << __LINE__ << ": key is: " << key << dendl;
     std::stringstream ss(key);
     while (getline(ss, item, delim)) {
         result.push_back(item);
@@ -75,7 +74,6 @@ int RGWOp_RemoteD4N_Get::send_response_data(bufferlist& bl, off_t bl_ofs,
 
 
 void RGWOp_RemoteD4N_Get::execute(optional_yield y) {
-  ldpp_dout(s, 20) << "AMIN: " << __func__ << ": " << __LINE__ << ": " << dendl;
   string bucketName;
   string objectName;
   uint64_t offset;
@@ -157,25 +155,21 @@ void RGWOp_RemoteD4N_Get::execute(optional_yield y) {
     key = oid_in_cache;
 
 
-  ldpp_dout(s, 20) << "AMIN: " << __func__ << ": " << __LINE__ << ": key is: " << key << dendl;
 
   if (!rgw::sal::Object::empty(s->object.get()))
       attrs = s->object->get_attrs();
 
-  ldpp_dout(s, 20) << "AMIN: " << __func__ << ": " << __LINE__ << dendl;
   op_ret = static_cast<rgw::sal::D4NFilterDriver*>(driver)->get_cache_driver()->get(s, key, offset, len , bl, attrs, y);
   if (op_ret < 0) {
     ldpp_dout(s, 5) << "ERROR: can't get key: " << cpp_strerror(op_ret) << dendl;
     return;
   }
-  ldpp_dout(s, 20) << "AMIN: " << __func__ << ": " << __LINE__ << ": data is: " << bl.to_str() << dendl;
 
   op_ret = send_response_data(bl, offset, len);
   if (op_ret < 0) {
     ldpp_dout(s, 5) << "ERROR: can't send seponse data: " << cpp_strerror(op_ret) << dendl;
     return;
   }
-  ldpp_dout(s, 20) << "AMIN: " << __func__ << ": " << __LINE__ << dendl;
   op_ret = 0;
 }
 
@@ -224,7 +218,6 @@ int RGWOp_RemoteD4N_Put::get_data(bufferlist& bl) {
 }
 
 void RGWOp_RemoteD4N_Put::execute(optional_yield y) {
-  ldpp_dout(s, 20) << "AMIN: " << __func__ << ": " << __LINE__ << dendl;
   bufferlist bl;
   rgw::sal::Attrs attrs;
   string prefix;
@@ -301,7 +294,6 @@ void RGWOp_RemoteD4N_Put::execute(optional_yield y) {
   else
     key = oid_in_cache;
 
-  ldpp_dout(s, 20) << "AMIN: " << __func__ << ": " << __LINE__ << ": key is: " << key << dendl;
 
   if (!rgw::sal::Object::empty(s->object.get()))
       attrs = s->object->get_attrs();
@@ -311,7 +303,6 @@ void RGWOp_RemoteD4N_Put::execute(optional_yield y) {
     return;
   }
 
-  ldpp_dout(s, 20) << "AMIN: " << __func__ << __LINE__ << ": data is: " << bl.to_str() << dendl;  
 
   if (bl.length() != len){
     ldpp_dout(s, 5) << __func__ << ": Data length is not right!" << dendl;
@@ -379,7 +370,6 @@ void RGWOp_RemoteD4N_Put::execute(optional_yield y) {
   // translate internal codes into return header
   if (op_ret == 0)
     update_status = "created";
-  ldpp_dout(s, 20) << "AMIN: " << __func__ << ": " << __LINE__ << dendl;
 }
 
 void RGWOp_RemoteD4N_Put::send_response() {

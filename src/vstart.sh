@@ -705,7 +705,7 @@ do_rgw_conf() {
     local flight_conf=$rgw_flight_frontend
     for n in $(seq 1 $CEPH_NUM_RGW); do
         wconf << EOF
-[client.rgw.${current_port}]
+[client.rgw22.${current_port}]
         rgw frontends = $rgw_frontend port=${current_port}${flight_conf:+,arrow_flight}
         admin socket = ${CEPH_OUT_DIR}/radosgw.${current_port}.asok
         debug rgw_flight = 20
@@ -1884,7 +1884,7 @@ do_rgw()
     # allow only first rgw to start arrow_flight server/port
     local flight_conf=$rgw_flight_frontend
     for n in $(seq 1 $CEPH_NUM_RGW); do
-        rgw_name="client.rgw.${current_port}"
+        rgw_name="client.rgw22.${current_port}"
 
         if [ "$CEPH_NUM_MON" -gt 0 ]; then
             ceph_adm auth get-or-create $rgw_name \
