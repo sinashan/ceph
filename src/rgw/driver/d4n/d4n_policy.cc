@@ -57,12 +57,12 @@ int RGWRemoteD4NGetCB::handle_data(bufferlist& bl, bool *pause)
 
 
 int LFUDAPolicy::init(CephContext *cct, const DoutPrefixProvider* dpp, asio::io_context& io_context, rgw::sal::Driver *_driver) {
-  dir->init(cct);
+  dir->init(cct, dpp);
   driver = _driver;
   int result = 0;
   response<int, int, int, int> resp;
 
-  /* Spawn write cache cleaning thread */
+  // Spawn write cache cleaning thread
   if (dpp->get_cct()->_conf->d4n_writecache_enabled == true){
     tc = std::thread(&CachePolicy::cleaning, this, dpp);
     tc.detach();
@@ -72,7 +72,7 @@ int LFUDAPolicy::init(CephContext *cct, const DoutPrefixProvider* dpp, asio::io_
     boost::system::error_code ec;
     request req;
     req.push("HEXISTS", "lfuda", "age"); 
-    req.push("HSET", "lfuda", "minLocalWeights_sum", std::to_string(weightSum)); /* New cache node will always have the minimum average weight */
+    req.push("HSET", "lfuda", "minLocalWeights_sum", std::to_string(weightSum)); // New cache node will always have the minimum average weight 
     req.push("HSET", "lfuda", "minLocalWeights_size", std::to_string(entries_map.size()));
     req.push("HSET", "lfuda", "minLocalWeights_address", dpp->get_cct()->_conf->rgw_local_cache_address);
   
@@ -89,7 +89,7 @@ int LFUDAPolicy::init(CephContext *cct, const DoutPrefixProvider* dpp, asio::io_
     return -EINVAL;
   }
 
-  if (!std::get<0>(resp).value()) { /* Only set maximum age if it doesn't exist */
+  if (!std::get<0>(resp).value()) { // Only set maximum age if it doesn't exist 
     try {
       boost::system::error_code ec;
       response<int> value;
@@ -110,13 +110,14 @@ int LFUDAPolicy::init(CephContext *cct, const DoutPrefixProvider* dpp, asio::io_
     }
   }
 
-  /* Spawn redis sync thread */
+  // Spawn redis sync thread
   asio::co_spawn(io_context.get_executor(),
 		   redis_sync(dpp, y), asio::detached);
 
 
   return result;
 }
+
 
 int LFUDAPolicy::getMinAvgWeight(const DoutPrefixProvider* dpp, int minAvgWeight, std::string cache_address, optional_yield y) {
   response<std::string, std::string, std::string> resp;

@@ -153,6 +153,7 @@ set(librgw_common_srcs
   rgw_lua_background.cc
   rgw_data_access.cc
   driver/d4n/d4n_directory.cc
+  driver/d4n/d4n_cpp_directory.cc
   driver/d4n/d4n_policy.cc
   driver/d4n/rgw_sal_d4n.cc
   driver/rados/cls_fifo_legacy.cc
@@ -249,6 +250,7 @@ if(WITH_RADOSGW_ARROW_FLIGHT)
 endif(WITH_RADOSGW_ARROW_FLIGHT)
 
 add_library(rgw_common STATIC ${librgw_common_srcs})
+#add_library(cpp_redis STATIC ${CPP_REDIS_LIBRARIES})
 
 include(CheckCXXCompilerFlag)
 check_cxx_compiler_flag("-Wimplicit-const-int-float-conversion"
@@ -489,7 +491,7 @@ target_link_libraries(radosgw-admin ${rgw_libs} librados
   cls_version_client cls_user_client
   global ${LIB_RESOLV}
   OATH::OATH
-  ${CURL_LIBRARIES} ${EXPAT_LIBRARIES} ${BLKID_LIBRARIES})
+  ${CURL_LIBRARIES} ${EXPAT_LIBRARIES} ${BLKID_LIBRARIES} ${CPP_REDIS_LIBRARIES})
 
 # this is unsatisfying and hopefully temporary; ARROW should not be
 # part of radosgw_admin

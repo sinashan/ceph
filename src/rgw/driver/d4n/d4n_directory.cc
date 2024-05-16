@@ -6,6 +6,7 @@
 namespace rgw { namespace d4n {
 
 // initiate a call to async_exec() on the connection's executor
+
 struct initiate_exec {
   std::shared_ptr<boost::redis::connection> conn;
 
@@ -14,7 +15,9 @@ struct initiate_exec {
 
   template <typename Handler, typename Response>
   void operator()(Handler handler, const boost::redis::request& req, Response& resp)
+  //void operator()(Handler handler, Response& resp)
   {
+    //conn->async_exec(req, resp, boost::asio::consign(std::move(handler), conn));
     auto h = boost::asio::consign(std::move(handler), conn);
     return boost::asio::dispatch(get_executor(),
         [c = conn, &req, &resp, h = std::move(h)] {
@@ -47,6 +50,27 @@ void redis_exec(std::shared_ptr<connection> conn,
   }
 }
 
+template <typename T>
+void redis_exec(const DoutPrefixProvider* dpp, std::shared_ptr<connection> conn,
+                boost::system::error_code& ec,
+                const boost::redis::request& req,
+                boost::redis::response<T>& resp, optional_yield y)
+{
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
+  if (y) {
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
+    auto yield = y.get_yield_context();
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
+    async_exec(std::move(conn), req, resp, yield[ec]);
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
+  } else {
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
+    async_exec(std::move(conn), req, resp, ceph::async::use_blocked[ec]);
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
+  }
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
+}
+
 std::string ObjectDirectory::build_index(CacheObj* object) 
 {
   return object->bucketName + "_" + object->objName;
@@ -64,12 +88,20 @@ int ObjectDirectory::exist_key(CacheObj* object, optional_yield y)
 
     redis_exec(conn, ec, req, resp, y);
 
-    if (ec)
+    if ((bool)ec)
       return false;
   } catch (std::exception &e) {}
 
   return std::get<0>(resp).value();
 }
+
+/*
+void ObjectDirectory::shutdown()
+{
+  // call cancel() on the connection's executor
+  boost::asio::dispatch(conn->get_executor(), [c = conn] { c->cancel(); });
+}
+*/ 
 
 int ObjectDirectory::set(CacheObj* object, optional_yield y) 
 {
@@ -382,16 +414,26 @@ int BlockDirectory::exist_key(CacheBlock* block, optional_yield y)
 
     redis_exec(conn, ec, req, resp, y);
 
-    if (ec)
+    if ((bool)ec)
       return false;
   } catch (std::exception &e) {}
 
   return std::get<0>(resp).value();
 }
 
-int BlockDirectory::set(CacheBlock* block, optional_yield y) 
+/*
+void BlockDirectory::shutdown()
 {
+  // call cancel() on the connection's executor
+  boost::asio::dispatch(conn->get_executor(), [c = conn] { c->cancel(); });
+}
+*/
+
+int BlockDirectory::set(const DoutPrefixProvider* dpp, CacheBlock* block, optional_yield y) 
+{
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
   std::string key = build_index(block);
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
     
   /* Every set will be treated as new */
   std::string endpoint;
@@ -407,6 +449,7 @@ int BlockDirectory::set(CacheBlock* block, optional_yield y)
   redisValues.push_back("globalWeight");
   redisValues.push_back(std::to_string(block->globalWeight));
   redisValues.push_back("blockHosts");
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
   
   for (auto const& host : block->hostsList) {
     if (endpoint.empty())
@@ -417,8 +460,10 @@ int BlockDirectory::set(CacheBlock* block, optional_yield y)
 
   if (!endpoint.empty())
     endpoint.pop_back();
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
 
   redisValues.push_back(endpoint);
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
 
   redisValues.push_back("objName");
   redisValues.push_back(block->cacheObj.objName);
@@ -428,6 +473,7 @@ int BlockDirectory::set(CacheBlock* block, optional_yield y)
   redisValues.push_back(block->cacheObj.creationTime); 
   redisValues.push_back("dirty");
   redisValues.push_back(std::to_string(block->cacheObj.dirty));
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
   /*
   redisValues.push_back("objHosts");
   
@@ -445,12 +491,15 @@ int BlockDirectory::set(CacheBlock* block, optional_yield y)
   redisValues.push_back(endpoint);
   */
   try {
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
     boost::system::error_code ec;
     request req;
     req.push_range("HMSET", key, redisValues);
     response<std::string> resp;
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
 
-    redis_exec(conn, ec, req, resp, y);
+    redis_exec(dpp, conn, ec, req, resp, y);
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
 
     if (ec) {
       return -ec.value();
@@ -458,6 +507,7 @@ int BlockDirectory::set(CacheBlock* block, optional_yield y)
   } catch (std::exception &e) {
     return -EINVAL;
   }
+  ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
 
   return 0;
 }

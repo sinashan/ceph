@@ -10,6 +10,8 @@
 #include "rgw_sal_d4n.h"
 #include "rgw_cache_driver.h"
 
+#define dout_subsys ceph_subsys_rgw
+
 namespace rgw::sal {
   class D4NFilterObject;
 }
@@ -63,7 +65,8 @@ class CachePolicy {
     CachePolicy() {}
     virtual ~CachePolicy() = default; 
 
-    virtual int init(CephContext *cct, const DoutPrefixProvider* dpp, asio::io_context& io_context, rgw::sal::Driver *_driver) = 0; 
+    virtual int init(CephContext *cct, const DoutPrefixProvider* dpp, asio::io_context& io_context, rgw::sal::Driver *_driver) = 0;
+    //virtual int init(CephContext *cct, const DoutPrefixProvider* dpp, rgw::sal::Driver *_driver) = 0;
     virtual int exist_key(std::string key) = 0;
     virtual int eviction(const DoutPrefixProvider* dpp, uint64_t size, optional_yield y) = 0;
     virtual void update(const DoutPrefixProvider* dpp, std::string& key, uint64_t offset, uint64_t len, std::string version, bool dirty, time_t creationTime, const rgw_user user, optional_yield y) = 0;
@@ -104,6 +107,8 @@ class LFUDAPolicy : public CachePolicy {
 
     int age = 1, weightSum = 0, postedSum = 0;
     optional_yield y = null_yield;
+
+    //net::io_context& io;
     std::shared_ptr<connection> conn;
     BlockDirectory* dir;
     rgw::cache::CacheDriver* cacheDriver;
@@ -133,17 +138,102 @@ class LFUDAPolicy : public CachePolicy {
 
   public:
     LFUDAPolicy(std::shared_ptr<connection>& conn, rgw::cache::CacheDriver* cacheDriver) : CachePolicy(), 
+    //LFUDAPolicy(net::io_context& io_context, rgw::cache::CacheDriver* cacheDriver) : CachePolicy(), 
+											   //io(io_context),
 											   conn(conn), 
 											   cacheDriver(cacheDriver)
     {
+      //conn = std::make_shared<connection>(boost::asio::make_strand(io_context));
+      //dir = new BlockDirectory{io};
       dir = new BlockDirectory{conn};
     }
     ~LFUDAPolicy() {
       rthread_stop();
+      //shutdown();
       delete dir;
     } 
 
     virtual int init(CephContext *cct, const DoutPrefixProvider* dpp, asio::io_context& io_context, rgw::sal::Driver *_driver) override; 
+    /*
+    virtual int init(CephContext *cct, const DoutPrefixProvider* dpp, rgw::sal::Driver *_driver){
+
+      std::string address = cct->_conf->rgw_filter_address;
+      config cfg;
+      cfg.addr.host = address.substr(0, address.find(":"));
+      cfg.addr.port = address.substr(address.find(":") + 1, address.length());
+      cfg.clientname = "D4N.Policy";
+
+      if (!cfg.addr.host.length() || !cfg.addr.port.length()) {
+	ldpp_dout(dpp, 10) << "LFUDAPolicy::" << __func__ << "(): Endpoint was not configured correctly." << dendl;
+	return -EDESTADDRREQ;
+      }
+
+      dir->init(cct, dpp);
+      conn->async_run(cfg, {}, net::consign(net::detached, conn));
+
+      driver = _driver;
+
+      // Spawn write cache cleaning thread 
+      if (dpp->get_cct()->_conf->d4n_writecache_enabled == true){
+        tc = std::thread(&CachePolicy::cleaning, this, dpp);
+        tc.detach();
+      }
+
+      int result = 0;
+      response<int, int, int, int> resp;
+
+       try {
+        boost::system::error_code ec;
+        request req;
+        req.push("HEXISTS", "lfuda", "age"); 
+        req.push("HSET", "lfuda", "minLocalWeights_sum", std::to_string(weightSum)); // New cache node will always have the minimum average weight 
+        req.push("HSET", "lfuda", "minLocalWeights_size", std::to_string(entries_map.size()));
+        req.push("HSET", "lfuda", "minLocalWeights_address", dpp->get_cct()->_conf->rgw_local_cache_address);
+  
+    redis_exec(conn, ec, req, resp, y);
+
+    if (ec) {
+      ldpp_dout(dpp, 10) << "LFUDAPolicy::" << __func__ << "() ERROR: " << ec.what() << dendl;
+      return -ec.value();
+    }
+
+    result = std::min(std::get<1>(resp).value(), std::min(std::get<2>(resp).value(), std::get<3>(resp).value()));
+  } catch (std::exception &e) {
+    ldpp_dout(dpp, 10) << "LFUDAPolicy::" << __func__ << "() ERROR: " << e.what() << dendl;
+    return -EINVAL;
+  }
+
+  if (!std::get<0>(resp).value()) { // Only set maximum age if it doesn't exist 
+    try {
+      boost::system::error_code ec;
+      response<int> value;
+      request req;
+      req.push("HSET", "lfuda", "age", age);
+    
+      redis_exec(conn, ec, req, value, y);
+
+      if (ec) {
+	ldpp_dout(dpp, 10) << "LFUDAPolicy::" << __func__ << "() ERROR: " << ec.what() << dendl;
+	return -ec.value();
+      }
+
+      result = std::min(result, std::get<0>(value).value());
+    } catch (std::exception &e) {
+      ldpp_dout(dpp, 10) << "LFUDAPolicy::" << __func__ << "() ERROR: " << e.what() << dendl;
+      return -EINVAL;
+    }
+  }
+
+  // Spawn redis sync thread
+    asio::co_spawn(io_context.get_executor(),
+		   redis_sync(dpp, y), asio::detached);
+
+
+
+      return 0;
+    } 
+    */
+
     virtual int exist_key(std::string key) override;
     virtual int eviction(const DoutPrefixProvider* dpp, uint64_t size, optional_yield y) override;
     virtual void update(const DoutPrefixProvider* dpp, std::string& key, uint64_t offset, uint64_t len, std::string version, bool dirty, time_t creationTime, const rgw_user user, optional_yield y) override;
@@ -152,6 +242,7 @@ class LFUDAPolicy : public CachePolicy {
     virtual bool eraseObj(const DoutPrefixProvider* dpp, const std::string& key, optional_yield y) override;
     virtual void cleaning(const DoutPrefixProvider* dpp) override;
     void save_y(optional_yield y) { this->y = y; }
+    //void shutdown();
 };
 
 class LRUPolicy : public CachePolicy {
@@ -169,7 +260,7 @@ class LRUPolicy : public CachePolicy {
   public:
     LRUPolicy(rgw::cache::CacheDriver* cacheDriver) : cacheDriver{cacheDriver} {}
 
-    virtual int init(CephContext *cct, const DoutPrefixProvider* dpp, asio::io_context& io_context, rgw::sal::Driver* _driver) { return 0; } 
+    virtual int init(CephContext *cct, const DoutPrefixProvider* dpp, asio::io_context& io_context, rgw::sal::Driver* _driver) override { return 0; } 
     virtual int exist_key(std::string key) override;
     virtual int eviction(const DoutPrefixProvider* dpp, uint64_t size, optional_yield y) override;
     virtual void update(const DoutPrefixProvider* dpp, std::string& key, uint64_t offset, uint64_t len, std::string version, bool dirty, time_t creationTime, const rgw_user user, optional_yield y) override;
@@ -186,9 +277,11 @@ class PolicyDriver {
 
   public:
     PolicyDriver(std::shared_ptr<connection>& conn, rgw::cache::CacheDriver* cacheDriver, std::string _policyName) : policyName(_policyName) 
+    //PolicyDriver(net::io_context& io_context, rgw::cache::CacheDriver* cacheDriver, std::string _policyName) : policyName(_policyName)
     {
       if (policyName == "lfuda") {
 	cachePolicy = new LFUDAPolicy(conn, cacheDriver);
+	//cachePolicy = new LFUDAPolicy(io_context, cacheDriver);
       } else if (policyName == "lru") {
 	cachePolicy = new LRUPolicy(cacheDriver);
       }

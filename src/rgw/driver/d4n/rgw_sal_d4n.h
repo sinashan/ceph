@@ -27,6 +27,7 @@
 #include "rgw_rest_conn.h"
 
 #include "driver/d4n/d4n_directory.h"
+#include "driver/d4n/d4n_cpp_directory.h"
 #include "driver/d4n/d4n_policy.h"
 
 #include <boost/intrusive/list.hpp>
@@ -57,11 +58,14 @@ public:
 
 class D4NFilterDriver : public FilterDriver {
   private:
-    std::shared_ptr<connection> conn;
+    std::shared_ptr<connection> connOD;
+    std::shared_ptr<connection> connBD;
+    std::shared_ptr<connection> connCP;
     rgw::cache::CacheDriver* cacheDriver;
     rgw::cache::CacheDriver* lsvdCacheDriver;
     rgw::d4n::ObjectDirectory* objDir;
     rgw::d4n::BlockDirectory* blockDir;
+    rgw::d4n::RGWBlockDirectory* blockDirCpp;
     rgw::d4n::PolicyDriver* policyDriver;
     boost::asio::io_context& io_context;
     bool lsvd_cache_enabled = false;
@@ -88,6 +92,7 @@ class D4NFilterDriver : public FilterDriver {
     rgw::cache::CacheDriver* get_lsvd_cache_driver() { return lsvdCacheDriver; }
     rgw::d4n::ObjectDirectory* get_obj_dir() { return objDir; }
     rgw::d4n::BlockDirectory* get_block_dir() { return blockDir; }
+    rgw::d4n::RGWBlockDirectory* get_block_dir_cpp() { return blockDirCpp; }
     rgw::d4n::PolicyDriver* get_policy_driver() { return policyDriver; }
 };
 
