@@ -66,6 +66,7 @@ class D4NFilterDriver : public FilterDriver {
     rgw::d4n::ObjectDirectory* objDir;
     rgw::d4n::BlockDirectory* blockDir;
     rgw::d4n::RGWBlockDirectory* blockDirCpp;
+    rgw::d4n::RGWObjectDirectory* objectDirCpp;
     rgw::d4n::PolicyDriver* policyDriver;
     boost::asio::io_context& io_context;
     bool lsvd_cache_enabled = false;
@@ -93,6 +94,7 @@ class D4NFilterDriver : public FilterDriver {
     rgw::d4n::ObjectDirectory* get_obj_dir() { return objDir; }
     rgw::d4n::BlockDirectory* get_block_dir() { return blockDir; }
     rgw::d4n::RGWBlockDirectory* get_block_dir_cpp() { return blockDirCpp; }
+    rgw::d4n::RGWObjectDirectory* get_obj_dir_cpp() { return objectDirCpp; }
     rgw::d4n::PolicyDriver* get_policy_driver() { return policyDriver; }
 };
 

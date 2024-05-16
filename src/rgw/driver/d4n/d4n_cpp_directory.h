@@ -8,10 +8,9 @@
 #include <vector>
 #include <list>
 #include <cstdint>
+#include <boost/lexical_cast.hpp>
 
 namespace rgw { namespace d4n {
-
-using namespace std;
 
 struct CacheObjectCpp {
   std::string objName; /* S3 object name */
@@ -40,12 +39,34 @@ struct CacheBlockCpp {
 class RGWDirectory{
 public:
 	RGWDirectory() {}
-	virtual ~RGWDirectory(){ cout << "RGW Directory is destroyed!";}
+	virtual ~RGWDirectory(){}
 	CephContext *cct;
 
 private:
 
 };
+
+class RGWObjectDirectory: public RGWDirectory {
+public:
+
+	RGWObjectDirectory() {}
+	void init(CephContext *_cct) {
+		cct = _cct;
+	}
+	virtual ~RGWObjectDirectory() {}
+
+	void findClient(std::string key, cpp_redis::client *client);
+	int set(CacheObjectCpp *ptr);
+	int get(CacheObjectCpp *ptr);
+	int del(CacheObjectCpp *ptr);
+	int update_field(CacheObjectCpp *ptr, std::string field, std::string value);
+	int get_attr(CacheObjectCpp *ptr, const char* name, bufferlist &dest);
+private:
+	int exist_key(CacheObjectCpp *ptr);
+	std::string buildIndex(CacheObjectCpp *ptr);
+};
+
+
 
 class RGWBlockDirectory: public RGWDirectory {
 public:
@@ -54,12 +75,15 @@ public:
 	void init(CephContext *_cct) {
 		cct = _cct;
 	}
-	virtual ~RGWBlockDirectory() { cout << "RGWObject Directory is destroyed!";}
+	virtual ~RGWBlockDirectory() {}
 
 	void findClient(std::string key, cpp_redis::client *client);
-	int existKey(std::string key, cpp_redis::client *client);
-	int setValue(CacheBlockCpp *ptr);
+	int set(CacheBlockCpp *ptr);
+	int get(CacheBlockCpp *ptr);
+	int del(CacheBlockCpp *ptr);
+	int update_field(CacheBlockCpp *ptr, std::string field, std::string value);
 private:
+	int exist_key(CacheBlockCpp *ptr);
 	std::string buildIndex(CacheBlockCpp *ptr);
 };
 

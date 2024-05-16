@@ -3936,6 +3936,16 @@ options:
   flags:
   - startup
   with_legacy: true
+- name: rgw_directory_master_count
+  type: int
+  level: advanced
+  desc: The number of redis server for the d4n directory
+  default: 1
+  services: 
+  - rgw
+  flags:
+  - startup
+  with_legacy: true
 - name: rgw_d4n_cache_cleaning_interval
   type: int
   level: advanced
