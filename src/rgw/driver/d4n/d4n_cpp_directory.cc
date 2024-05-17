@@ -211,8 +211,8 @@ int RGWBlockDirectory::exist_key(CacheBlockCpp *ptr)
   return result;
 }
 
-int RGWObjectDirectory::set(CacheObjectCpp *ptr){
-
+int RGWObjectDirectory::set(CacheObjectCpp *ptr, optional_yield y)
+{
   //creating the index based on bucket_name, obj_name, and chunk_id
   ldout(cct,10) <<__func__<<": " << __LINE__ <<  dendl;
   std::string key = buildIndex(ptr);
@@ -248,8 +248,9 @@ int RGWObjectDirectory::set(CacheObjectCpp *ptr){
     ldout(cct,10) <<__func__<<" not in directory key:  " << key <<  dendl;
 
     std::vector<std::pair<std::string, std::string>> list;
-    list.push_back(std::make_pair("bucket_name", ptr->bucketName));
-    list.push_back(std::make_pair("obj_name", ptr->objName));
+
+    list.push_back(std::make_pair("bucketName", ptr->bucketName));
+    list.push_back(std::make_pair("objName", ptr->objName));
     list.push_back(std::make_pair("creationTime", ptr->creationTime));
     list.push_back(std::make_pair("dirty", std::to_string(ptr->dirty)));
     list.push_back(std::make_pair("version", ptr->version));
@@ -316,24 +317,19 @@ int RGWObjectDirectory::set(CacheObjectCpp *ptr){
   return 0;
 }
 
-int RGWBlockDirectory::set(CacheBlockCpp *ptr){
-
-  ldout(cct,10) <<__func__<<": " << __LINE__ <<  dendl;
+int RGWBlockDirectory::set(CacheBlockCpp *ptr, optional_yield y)
+{
   //creating the index based on bucket_name, obj_name, and chunk_id
   std::string key = buildIndex(ptr);
-  ldout(cct,10) <<__func__<<": " << __LINE__ << ": key is" << key <<  dendl;
   cpp_redis::client client;
   findClient(key, &client);
-  ldout(cct,10) <<__func__<<": " << __LINE__ <<  dendl;
   if (!(client.is_connected())){
 	return -1;
   }
-  ldout(cct,10) <<__func__<<": " << __LINE__ <<  dendl;
   std::string result;
   std::string endpoint;
   std::string local_host = cct->_conf->rgw_local_cache_address;
   int exist = 0;
-  ldout(cct,10) <<__func__<<": " << __LINE__ <<  dendl;
 
   std::vector<std::string> keys;
   keys.push_back(key);
@@ -348,17 +344,15 @@ int RGWBlockDirectory::set(CacheBlockCpp *ptr){
   catch(std::exception &e) {
     exist = 0;
   }
-  ldout(cct,10) <<__func__<<": " << __LINE__ <<  dendl;
 	
   if (!exist) {
-    ldout(cct,10) <<__func__<<" not in directory key:  " << key <<  dendl;
-
     std::vector<std::pair<std::string, std::string>> list;
+
     list.push_back(std::make_pair("blockID", std::to_string(ptr->blockID)));
     list.push_back(std::make_pair("version", ptr->version));
     list.push_back(std::make_pair("size", std::to_string(ptr->size)));
-    list.push_back(std::make_pair("bucket_name", ptr->cacheObj.bucketName));
-    list.push_back(std::make_pair("obj_name", ptr->cacheObj.objName));
+    list.push_back(std::make_pair("bucketName", ptr->cacheObj.bucketName));
+    list.push_back(std::make_pair("objName", ptr->cacheObj.objName));
     list.push_back(std::make_pair("creationTime", ptr->cacheObj.creationTime));
     list.push_back(std::make_pair("dirty", std::to_string(ptr->cacheObj.dirty)));
     list.push_back(std::make_pair("globalWeight", std::to_string(ptr->globalWeight)));
@@ -421,7 +415,8 @@ int RGWBlockDirectory::set(CacheBlockCpp *ptr){
   return 0;
 }
 
-int RGWObjectDirectory::update_field(CacheObjectCpp *ptr, std::string field, std::string value){
+int RGWObjectDirectory::update_field(CacheObjectCpp *ptr, std::string field, std::string value, optional_yield y)
+{
   std::vector<std::pair<std::string, std::string>> list;
   list.push_back(std::make_pair(field, value));
 
@@ -490,7 +485,8 @@ int RGWObjectDirectory::update_field(CacheObjectCpp *ptr, std::string field, std
 
 }
 
-int RGWBlockDirectory::update_field(CacheBlockCpp *ptr, std::string field, std::string value){
+int RGWBlockDirectory::update_field(CacheBlockCpp *ptr, std::string field, std::string value, optional_yield y)
+{
   std::vector<std::pair<std::string, std::string>> list;
   list.push_back(std::make_pair(field, value));
 
@@ -558,7 +554,8 @@ int RGWBlockDirectory::update_field(CacheBlockCpp *ptr, std::string field, std::
   return 0;
 }
 
-int RGWObjectDirectory::del(CacheObjectCpp *ptr){
+int RGWObjectDirectory::del(CacheObjectCpp *ptr, optional_yield y)
+{
   int result = 0;
   std::vector<std::string> keys;
   cpp_redis::client client;
@@ -583,7 +580,8 @@ int RGWObjectDirectory::del(CacheObjectCpp *ptr){
   }
 }
 
-int RGWBlockDirectory::del(CacheBlockCpp *ptr){
+int RGWBlockDirectory::del(CacheBlockCpp *ptr, optional_yield y)
+{
   int result = 0;
   std::vector<std::string> keys;
   cpp_redis::client client;
@@ -608,11 +606,11 @@ int RGWBlockDirectory::del(CacheBlockCpp *ptr){
   }
 }
 
-int RGWObjectDirectory::get(CacheObjectCpp *ptr){
-
+int RGWObjectDirectory::get(CacheObjectCpp *ptr, optional_yield y)
+{
   cpp_redis::client client;
   std::string key = buildIndex(ptr);
-  ldout(cct,10) << __func__ << " object in func getValue "<< key << dendl;
+  ldout(cct,10) << __func__ << ": " << __LINE__<< ": object: "<< key << dendl;
   try{
     findClient(key, &client);
     ldout(cct,10) << __func__ << " object findclient func"<< key << dendl;
@@ -624,43 +622,45 @@ int RGWObjectDirectory::get(CacheObjectCpp *ptr){
 	return -EINVAL;
   }
 
-  ldout(cct,10) << __func__ << " object af2 in func getValue "<< key << dendl;
+  ldout(cct,10) << __func__ << ": " << __LINE__<< ": object: "<< key << dendl;
   if (exist_key(ptr)){
     try{
 	std::string obj_name;
 	std::string bucket_name;
 	std::string creationTime;
 	std::string dirty;
-	std::string objHosts;
 	std::string version;
 	std::string size;
 	std::string in_lsvd;
+	std::string objHosts;
 	std::string attrs;
+
+
 
 	//fields will be filled by the redis hmget functoin
 	std::vector<std::string> fields;
-	fields.push_back("objName");
 	fields.push_back("bucketName");
+	fields.push_back("objName");
 	fields.push_back("creationTime");
 	fields.push_back("dirty");
-	fields.push_back("objHosts");
 	fields.push_back("version");
 	fields.push_back("size");
 	fields.push_back("in_lsvd");
+	fields.push_back("objHosts");
 	fields.push_back(RGW_ATTR_ACL);
 
-	client.hmget(key, fields, [&obj_name, &bucket_name, &creationTime, &dirty, &objHosts, &version, &size, &in_lsvd, &attrs](cpp_redis::reply& reply){
+	client.hmget(key, fields, [&bucket_name, &obj_name, &creationTime, &dirty, &version, &size, &in_lsvd, &objHosts, &attrs](cpp_redis::reply& reply){
 	  if (reply.is_array()){
 	    auto arr = reply.as_array();
 	    if (!arr[0].is_null()){
-	      obj_name = arr[0].as_string();
-    	      bucket_name = arr[1].as_string();
-	      creationTime  = arr[2].as_string();
+    	      bucket_name = arr[0].as_string();
+	      obj_name = arr[1].as_string();
+	      creationTime = arr[2].as_string();
 	      dirty = arr[3].as_string();
-  	      objHosts = arr[4].as_string();
-	      version = arr[5].as_string();
- 	      size = arr[6].as_string();
-	      in_lsvd = arr[7].as_string();
+	      version = arr[4].as_string();
+ 	      size = arr[5].as_string();
+	      in_lsvd = arr[6].as_string();
+  	      objHosts = arr[7].as_string();
 	      attrs = arr[8].as_string();
 	    }
 	  }
@@ -683,6 +683,9 @@ int RGWObjectDirectory::get(CacheObjectCpp *ptr){
 	ptr->size = std::stoull(size);
 	ptr->in_lsvd = boost::lexical_cast<bool>(in_lsvd);
 	ptr->attrs[RGW_ATTR_ACL] = buffer::list::static_from_string(attrs);
+        ldout(cct,10) << __func__ << ": " << __LINE__<< ": objName: "<< obj_name << dendl;
+        ldout(cct,10) << __func__ << ": " << __LINE__<< ": version: "<< version << dendl;
+        ldout(cct,10) << __func__ << ": " << __LINE__<< ": size: "<< size << dendl;
     }
     catch(std::exception &e) {
       ldout(cct,10) << __func__ << " Error" << " key " << key << dendl;
@@ -695,8 +698,8 @@ int RGWObjectDirectory::get(CacheObjectCpp *ptr){
   return 0;
 }
 
-int RGWBlockDirectory::get(CacheBlockCpp *ptr){
-
+int RGWBlockDirectory::get(CacheBlockCpp *ptr, optional_yield y)
+{
   cpp_redis::client client;
   std::string key = buildIndex(ptr);
   ldout(cct,10) << __func__ << " object in func getValue "<< key << dendl;
@@ -731,27 +734,26 @@ int RGWBlockDirectory::get(CacheBlockCpp *ptr){
         fields.push_back("blockID");
         fields.push_back("version");
         fields.push_back("size");
+	fields.push_back("bucketName");
+	fields.push_back("objName");
+	fields.push_back("creationTime");
+	fields.push_back("dirty");
         fields.push_back("globalWeight");
         fields.push_back("blockHosts");
 
-	fields.push_back("objName");
-	fields.push_back("bucketName");
-	fields.push_back("creationTime");
-	fields.push_back("dirty");
-
-	client.hmget(key, fields, [&obj_name, &bucket_name, &creationTime, &dirty, &blockHosts, &version, &size, &globalWeight, &blockID](cpp_redis::reply& reply){
+	client.hmget(key, fields, [&blockID, &version, &size, &bucket_name, &obj_name, &creationTime, &dirty, &globalWeight, &blockHosts](cpp_redis::reply& reply){
 	  if (reply.is_array()){
 	    auto arr = reply.as_array();
 	    if (!arr[0].is_null()){
-	      obj_name = arr[0].as_string();
-    	      bucket_name = arr[1].as_string();
-	      creationTime  = arr[2].as_string();
-	      dirty = arr[3].as_string();
-  	      blockHosts = arr[4].as_string();
-	      version = arr[5].as_string();
- 	      size = arr[6].as_string();
+	      blockID = arr[0].as_string();
+	      version = arr[1].as_string();
+ 	      size = arr[2].as_string();
+    	      bucket_name = arr[3].as_string();
+	      obj_name = arr[4].as_string();
+	      creationTime  = arr[5].as_string();
+	      dirty = arr[6].as_string();
 	      globalWeight = arr[7].as_string();
-	      blockID = arr[8].as_string();
+  	      blockHosts = arr[8].as_string();
 	    }
 	  }
 	});
@@ -775,6 +777,10 @@ int RGWBlockDirectory::get(CacheBlockCpp *ptr){
 	ptr->version = version;
 	ptr->size = boost::lexical_cast<uint64_t>(size);
 	ptr->globalWeight = boost::lexical_cast<int>(globalWeight);
+
+        ldout(cct,10) << __func__ << ": " << __LINE__<< ": objName: "<< obj_name << dendl;
+        ldout(cct,10) << __func__ << ": " << __LINE__<< ": version: "<< version << dendl;
+        ldout(cct,10) << __func__ << ": " << __LINE__<< ": size: "<< size << dendl;
     }
     catch(std::exception &e) {
       ldout(cct,10) << __func__ << " Error" << " key " << key << dendl;
@@ -787,11 +793,11 @@ int RGWBlockDirectory::get(CacheBlockCpp *ptr){
   return 0;
 }
 
-int RGWObjectDirectory::get_attr(CacheObjectCpp *ptr, const char* name, bufferlist &dest)
+int RGWObjectDirectory::get_attr(CacheObjectCpp *ptr, const char* name, bufferlist &dest, optional_yield y)
 {
   cpp_redis::client client;
   std::string key = buildIndex(ptr);
-  ldout(cct,10) << __func__ << " object in func getValue "<< key << dendl;
+  ldout(cct,10) << __func__ << " object in func get "<< key << dendl;
   try{
     findClient(key, &client);
     ldout(cct,10) << __func__ << " object findclient func"<< key << dendl;
@@ -803,7 +809,7 @@ int RGWObjectDirectory::get_attr(CacheObjectCpp *ptr, const char* name, bufferli
 	return -EINVAL;
   }
 
-  ldout(cct,10) << __func__ << " object af2 in func getValue "<< key << dendl;
+  ldout(cct,10) << __func__ << ": " << __LINE__<< ": object: "<< key << dendl;
   if (exist_key(ptr)){
     try{
 	std::string value;

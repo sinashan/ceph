@@ -56,11 +56,11 @@ public:
 	virtual ~RGWObjectDirectory() {}
 
 	void findClient(std::string key, cpp_redis::client *client);
-	int set(CacheObjectCpp *ptr);
-	int get(CacheObjectCpp *ptr);
-	int del(CacheObjectCpp *ptr);
-	int update_field(CacheObjectCpp *ptr, std::string field, std::string value);
-	int get_attr(CacheObjectCpp *ptr, const char* name, bufferlist &dest);
+	int set(CacheObjectCpp *ptr, optional_yield y);
+	int get(CacheObjectCpp *ptr, optional_yield y);
+	int del(CacheObjectCpp *ptr, optional_yield y);
+	int update_field(CacheObjectCpp *ptr, std::string field, std::string value, optional_yield y);
+	int get_attr(CacheObjectCpp *ptr, const char* name, bufferlist &dest, optional_yield y);
 private:
 	int exist_key(CacheObjectCpp *ptr);
 	std::string buildIndex(CacheObjectCpp *ptr);
@@ -78,10 +78,10 @@ public:
 	virtual ~RGWBlockDirectory() {}
 
 	void findClient(std::string key, cpp_redis::client *client);
-	int set(CacheBlockCpp *ptr);
-	int get(CacheBlockCpp *ptr);
-	int del(CacheBlockCpp *ptr);
-	int update_field(CacheBlockCpp *ptr, std::string field, std::string value);
+	int set(CacheBlockCpp *ptr, optional_yield y);
+	int get(CacheBlockCpp *ptr, optional_yield y);
+	int del(CacheBlockCpp *ptr, optional_yield y);
+	int update_field(CacheBlockCpp *ptr, std::string field, std::string value, optional_yield y);
 private:
 	int exist_key(CacheBlockCpp *ptr);
 	std::string buildIndex(CacheBlockCpp *ptr);

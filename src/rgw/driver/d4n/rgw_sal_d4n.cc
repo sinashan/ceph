@@ -440,10 +440,10 @@ int D4NFilterObject::D4NFilterReadOp::get_attr(const DoutPrefixProvider* dpp, co
 {
 //  ldpp_dout(dpp, 20) << "AMIN: D4NFilterObject:" << __func__ << __LINE__ << dendl;
   std::string attr_value;
-  rgw::d4n::CacheObj object;
+  rgw::d4n::CacheObjectCpp object;
   object.objName = source->get_key().get_oid();
   object.bucketName = source->get_bucket()->get_name();
-  int ret = source->driver->get_obj_dir()->get_attr(dpp, &object, name, dest, y);
+  int ret = source->driver->get_obj_dir_cpp()->get_attr(&object, name, dest, y);
   if (ret < 0){
     //checking backend
     return next->get_attr(dpp, name, dest, y);
@@ -501,10 +501,10 @@ int D4NFilterObject::D4NFilterReadOp::prepare(optional_yield y, const DoutPrefix
 //  ldpp_dout(dpp, 20) << "AMIN: D4NFilterObject:" << __func__ << dendl;
   int retDir;
   std::string localCache = g_conf()->rgw_local_cache_address;
-  rgw::d4n::CacheObj object;
+  rgw::d4n::CacheObjectCpp object;
   object.objName = source->get_key().get_oid();
   object.bucketName = source->get_bucket()->get_name();
-  retDir = source->driver->get_obj_dir()->get(&object, y);
+  retDir = source->driver->get_obj_dir_cpp()->get(&object, y);
 
   ldpp_dout(dpp, 20) << "AMIN: D4NFilterObject:" << __func__ << ": object size is: "  << object.size << dendl;
   //TODO: we have to check object's size and if it is small send a request to LSVD cache
@@ -521,6 +521,7 @@ int D4NFilterObject::D4NFilterReadOp::prepare(optional_yield y, const DoutPrefix
       	    cached_local = 1; //local
     	    source->set_obj_size(object.size);
     	    source->set_object_version(object.version);
+    	    source->set_object_dirty(object.dirty);
             return 0;
 	  }
 	  else{
@@ -533,6 +534,7 @@ int D4NFilterObject::D4NFilterReadOp::prepare(optional_yield y, const DoutPrefix
 	    }
     	    source->set_obj_size(object.size);
     	    source->set_object_version(object.version);
+    	    source->set_object_dirty(object.dirty);
             return 0;
 	  }
 	}
@@ -548,6 +550,7 @@ int D4NFilterObject::D4NFilterReadOp::prepare(optional_yield y, const DoutPrefix
 	}
     	source->set_obj_size(object.size);
     	source->set_object_version(object.version);
+    	source->set_object_dirty(object.dirty);
 	//TODO: when we have more lsvd servers, we should hash the name and based on it
 	// find the lsvd cache address.
         cacheLocation = g_conf()->rgw_d4n_lsvd_cache_address;
@@ -559,6 +562,7 @@ int D4NFilterObject::D4NFilterReadOp::prepare(optional_yield y, const DoutPrefix
       if (cached_local == 4){ //remote big object
     	source->set_obj_size(object.size);
     	source->set_object_version(object.version);
+    	source->set_object_dirty(object.dirty);
         cacheLocation = object.hostsList.back(); //we read the object from the last cache accessing it
         return getRemote(dpp, source->get_key().get_oid(), cacheLocation, y);
 	//return 0;
@@ -716,7 +720,7 @@ int D4NFilterObject::D4NFilterReadOp::flush(const DoutPrefixProvider* dpp, rgw::
       std::pair<uint64_t, uint64_t> ofs_len_pair = it->second;
       uint64_t ofs = ofs_len_pair.first;
       uint64_t len = ofs_len_pair.second;
-      bool dirty = false;
+      bool dirty = source->get_object_dirty();
       /*
       std::stringstream s;
       utime_t ut(source->get_mtime());
@@ -724,19 +728,7 @@ int D4NFilterObject::D4NFilterReadOp::flush(const DoutPrefixProvider* dpp, rgw::
       */
       time_t creationTime = ceph::real_clock::to_time_t(source->get_mtime());
 
-      rgw::d4n::CacheBlock block;
-      block.cacheObj.objName = source->get_key().get_oid();
-      block.cacheObj.bucketName = source->get_bucket()->get_name();
-      block.blockID = ofs;
-      block.size = len;
-
       std::string oid_in_cache = prefix + "_" + std::to_string(ofs) + "_" + std::to_string(len);
-
-      if (source->driver->get_block_dir()->get(&block, y) == 0){
-	if (block.dirty == true){ 
-	  dirty = true;
-	}
-      }
 
       ldpp_dout(dpp, 20) << "D4NFilterObject::" << __func__ << " calling update for offset: " << offset << " adjusted offset: " << ofs  << " length: " << len << " oid_in_cache: " << oid_in_cache << dendl;
       source->driver->get_policy_driver()->get_cache_policy()->update(dpp, oid_in_cache, ofs, len, version, dirty, creationTime,  source->get_bucket()->get_owner(), y);
@@ -797,13 +789,16 @@ int D4NFilterObject::D4NFilterReadOp::remoteFlush(const DoutPrefixProvider* dpp,
   received_data.begin(ofs).copy(len, bl);
   cb->handle_data(received_data, ofs, len);
 
-  rgw::d4n::BlockDirectory* blockDir = source->driver->get_block_dir();
-  rgw::d4n::ObjectDirectory* objectDir = source->driver->get_obj_dir();
+  rgw::d4n::RGWBlockDirectory* blockDir = source->driver->get_block_dir_cpp();
+  rgw::d4n::RGWObjectDirectory* objectDir = source->driver->get_obj_dir_cpp();
+  rgw::d4n::CacheBlockCpp block;
+  rgw::d4n::CacheObjectCpp object;
+  rgw::d4n::CacheObjectCpp existing_object;
 
-  rgw::d4n::CacheBlock block, existing_block;
-  rgw::d4n::CacheObj object;
+  
+  //rgw::d4n::CacheBlock block, existing_block;
+  //rgw::d4n::CacheObj object;
 
-  rgw::d4n::CacheObj existing_object;
   existing_object.objName = source->get_key().get_oid();
   existing_object.bucketName = source->get_bucket()->get_name();
   int retDir = objectDir->get(&existing_object, y);
@@ -811,25 +806,26 @@ int D4NFilterObject::D4NFilterReadOp::remoteFlush(const DoutPrefixProvider* dpp,
     ldpp_dout(dpp, 10) << "ERROR: D4NFilterObject::remoteFlush: could not update directory! " << dendl;
     return 0; //data is already returned to the user 
   }
+  
 
+  //block.hostsList.push_back(blockDir->cct->_conf->rgw_local_cache_address); 
+  //object.hostsList.push_back(blockDir->cct->_conf->rgw_local_cache_address); 
 
-    block.hostsList.push_back(blockDir->cct->_conf->rgw_local_cache_address); 
-    object.hostsList.push_back(blockDir->cct->_conf->rgw_local_cache_address); 
+  block.cacheObj.objName = source->get_key().get_oid();
+  block.cacheObj.bucketName = source->get_bucket()->get_name();
+  object.objName = source->get_key().get_oid();
+  object.bucketName = source->get_bucket()->get_name();
 
-    block.cacheObj.objName = source->get_key().get_oid();
-    block.cacheObj.bucketName = source->get_bucket()->get_name();
-    object.objName = source->get_key().get_oid();
-    object.bucketName = source->get_bucket()->get_name();
-
+  
     //populating fields needed for building directory index
-    existing_block.cacheObj.objName = block.cacheObj.objName;
-    existing_block.cacheObj.bucketName = block.cacheObj.bucketName;
+    //existing_block.cacheObj.objName = block.cacheObj.objName;
+    //existing_block.cacheObj.bucketName = block.cacheObj.bucketName;
 
     //TODO: we need to have more attrs in the directory besides RGW_ATTR_ACL
     Attrs attrs; 
     attrs[RGW_ATTR_ACL] = existing_object.attrs[RGW_ATTR_ACL];
     std::string version = existing_object.version;
-
+  
     std::string prefix;
     if (version.empty()) {
       prefix = existing_object.bucketName + "_" + existing_object.objName;
@@ -840,11 +836,7 @@ int D4NFilterObject::D4NFilterReadOp::remoteFlush(const DoutPrefixProvider* dpp,
     uint64_t size = existing_object.size;
     bool dirty = false; //Reading from remote, we are not responible for it's being dirty
 
-    //std::chrono::seconds dur(std::stol(existing_object.creationTime));
-    //std::chrono::time_point<std::chrono::system_clock> dt(dur);
-    //time_t creationTime = dt;
     time_t creationTime = std::stol(existing_object.creationTime);
-   
 
     ldpp_dout(dpp, 20) << __func__ << ": version stored in update method is: " << version << dendl;
 
@@ -905,10 +897,10 @@ int D4NFilterObject::D4NFilterReadOp::iterateLSVD(const DoutPrefixProvider* dpp,
 {
   const uint64_t window_size = g_conf()->rgw_get_obj_window_size;
 
-  rgw::d4n::CacheObj object;
+  rgw::d4n::CacheObjectCpp object;
   object.objName = source->get_key().get_oid();
   object.bucketName = source->get_bucket()->get_name();
-  int ret = source->driver->get_obj_dir()->get(&object, y);
+  int ret = source->driver->get_obj_dir_cpp()->get(&object, y);
   if (ret < 0){
     ldpp_dout(dpp, 10) << "ERROR: D4NFilterObject::iterateLSVD: could not get data from directory! " << dendl;
     return ret;
@@ -956,10 +948,10 @@ int D4NFilterObject::D4NFilterReadOp::iterateLSVD(const DoutPrefixProvider* dpp,
 int D4NFilterObject::D4NFilterReadOp::iterateRemote(const DoutPrefixProvider* dpp, int64_t ofs, int64_t end,
                         RGWGetDataCB* cb, optional_yield y) 
 {
-  rgw::d4n::CacheObj object;
+  rgw::d4n::CacheObjectCpp object;
   object.objName = source->get_key().get_oid();
   object.bucketName = source->get_bucket()->get_name();
-  int ret = source->driver->get_obj_dir()->get(&object, y);
+  int ret = source->driver->get_obj_dir_cpp()->get(&object, y);
   if (ret < 0){
     ldpp_dout(dpp, 10) << "ERROR: D4NFilterObject::iterateRemote: could not get data from directory! " << dendl;
     return ret;
@@ -1017,8 +1009,8 @@ int D4NFilterObject::D4NFilterReadOp::iterateRemote(const DoutPrefixProvider* dp
     cb->handle_data(received_data, adjusted_start_ofs, len_to_read);
 
 
-    rgw::d4n::CacheBlock block, existing_block;
-    rgw::d4n::BlockDirectory* blockDir = source->driver->get_block_dir();
+    rgw::d4n::CacheBlockCpp block;//, existing_block;
+    rgw::d4n::RGWBlockDirectory* blockDir = source->driver->get_block_dir_cpp();
 
     block.hostsList.push_back(blockDir->cct->_conf->rgw_local_cache_address); 
     block.cacheObj.objName = source->get_key().get_oid();
@@ -1032,8 +1024,8 @@ int D4NFilterObject::D4NFilterReadOp::iterateRemote(const DoutPrefixProvider* dp
 
 
     //populating fields needed for building directory index
-    existing_block.cacheObj.objName = block.cacheObj.objName;
-    existing_block.cacheObj.bucketName = block.cacheObj.bucketName;
+    //existing_block.cacheObj.objName = block.cacheObj.objName;
+    //existing_block.cacheObj.bucketName = block.cacheObj.bucketName;
 
     Attrs attrs = object.attrs; 
  
@@ -1059,10 +1051,10 @@ int D4NFilterObject::D4NFilterReadOp::iterateRemote(const DoutPrefixProvider* dp
             if (start_part_num == (num_parts - 1)) //last part
 	      source->driver->get_policy_driver()->get_cache_policy()->updateObj(dpp, prefix, version, dirty, source->get_obj_size(), creationTime, source->get_bucket()->get_owner(), objEtag, y);
 
-            if (!blockDir->exist_key(&block, y)) {
-              if (blockDir->set(dpp, &block, y) < 0) //should we revert previous steps if this step fails?
+            //if (!blockDir->exist_key(&block, y)) {
+              if (blockDir->set(&block, y) < 0) //should we revert previous steps if this step fails?
 		ldpp_dout(dpp, 10) << "D4NFilterObject::D4NFilterReadOp::D4NFilterGetCB::" << __func__ << "(): BlockDirectory set method failed." << dendl;
-            } else {
+            /*} else {
               existing_block.blockID = block.blockID;
               existing_block.size = block.size;
               if (blockDir->get(&existing_block, y) < 0) {
@@ -1071,9 +1063,9 @@ int D4NFilterObject::D4NFilterReadOp::iterateRemote(const DoutPrefixProvider* dp
                 if (blockDir->update_field(&block, "blockHosts", blockDir->cct->_conf->rgw_local_cache_address, y) < 0)
                   ldpp_dout(dpp, 10) << "D4NFilterObject::D4NFilterReadOp::D4NFilterGetCB::" << __func__ << "(): BlockDirectory update_field method failed for hostsList." << dendl;
               }
-	    }
+	    }*/
             if (start_part_num == (num_parts - 1)){ //last part
-              if (source->driver->get_obj_dir()->update_field(&object, "objHosts", blockDir->cct->_conf->rgw_local_cache_address, y) < 0)
+              if (source->driver->get_obj_dir_cpp()->update_field(&object, "objHosts", blockDir->cct->_conf->rgw_local_cache_address, y) < 0)
                 ldpp_dout(dpp, 10) << "D4NFilterObject::D4NFilterReadOp::D4NFilterGetCB::" << __func__ << "(): objectDirectory update_field method failed for hostsList." << dendl;
             }
           } else {
@@ -1150,17 +1142,14 @@ int D4NFilterObject::D4NFilterReadOp::iterate(const DoutPrefixProvider* dpp, int
     version = source->get_instance();
   }
 
-  bool dirty = false;
-  rgw::d4n::CacheObj object;
+  bool dirty = source->get_object_dirty();
+  /*
+  rgw::d4n::CacheObjectCpp object;
   object.objName = objName;
   object.bucketName = bucketName;
-  if (source->driver->get_obj_dir()->get(&object, y) == 0){
+  if (source->driver->get_obj_dir_cpp()->get(&object) == 0){
     dirty = object.dirty;
   }
-  /*
-  rgw::d4n::CacheBlock block;
-  block.cacheObj.objName = objName;
-  block.cacheObj.bucketName = bucketName;
   */
   do {
     uint64_t id = adjusted_start_ofs, read_ofs = 0; //read_ofs is the actual offset to start reading from the current part/ chunk
@@ -1403,8 +1392,8 @@ int D4NFilterObject::D4NFilterReadOp::D4NFilterGetCB::handle_data(bufferlist& bl
     	    ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
 	    // Store block in directory
             //if (!blockDir->exist_key(&block, *y)) {
-              if (blockDir->set(&block) < 0) //should we revert previous steps if this step fails?
-		ldpp_dout(dpp, 10) << "D4NFilterObject::D4NFilterReadOp::D4NFilterGetCB::" << __func__ << "(): BlockDirectory set method failed." << dendl;
+            if (blockDir->set(&block, *y) < 0) //should we revert previous steps if this step fails?
+	      ldpp_dout(dpp, 10) << "D4NFilterObject::D4NFilterReadOp::D4NFilterGetCB::" << __func__ << "(): BlockDirectory set method failed." << dendl;
     	    ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
 	    /*
             } else {
@@ -1427,7 +1416,7 @@ int D4NFilterObject::D4NFilterReadOp::D4NFilterGetCB::handle_data(bufferlist& bl
             }
 	    */
 	    //if (!objectDir->exist_key(&object, *y)) {
-              if (objectDir->set(&object) < 0) 
+              if (objectDir->set(&object, *y) < 0) 
 		ldpp_dout(dpp, 10) << "D4NFilterObject::D4NFilterReadOp::D4NFilterGetCB::" << __func__ << "(): ObjectDirectory set method failed." << dendl;
  	    /*
             } else {
@@ -1475,7 +1464,7 @@ int D4NFilterObject::D4NFilterReadOp::D4NFilterGetCB::handle_data(bufferlist& bl
     	    ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
             // Store block in directory 
             //if (!blockDir->exist_key(&block, *y)) {
-              if (blockDir->set(&block) < 0)
+              if (blockDir->set(&block, *y) < 0)
 		ldpp_dout(dpp, 10) << "D4NFilterObject::D4NFilterReadOp::D4NFilterGetCB::" << __func__ << "(): BlockDirectory set method failed." << dendl;
     	    ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
 	    /*
@@ -1535,7 +1524,7 @@ int D4NFilterObject::D4NFilterReadOp::D4NFilterGetCB::handle_data(bufferlist& bl
               // Store block in directory
               //if (!blockDir->exist_key(&block, *y)) {
     	      ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
-                if (blockDir->set(&block) < 0)
+                if (blockDir->set(&block, *y) < 0)
                   ldpp_dout(dpp, 10) << "D4NFilterObject::D4NFilterReadOp::D4NFilterGetCB::" << __func__ << "(): BlockDirectory set method failed." << dendl;
     	      ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
 	      /*
@@ -1584,12 +1573,12 @@ int D4NFilterObject::D4NFilterReadOp::D4NFilterGetCB::handle_data(bufferlist& bl
 int D4NFilterObject::D4NFilterDeleteOp::delete_obj(const DoutPrefixProvider* dpp,
                                                    optional_yield y, uint32_t flags)
 {
-  rgw::d4n::CacheObj obj = rgw::d4n::CacheObj{ // TODO: Add logic to ObjectDirectory del method to also delete all blocks belonging to that object
+  rgw::d4n::CacheObjectCpp object = rgw::d4n::CacheObjectCpp{ // TODO: Add logic to ObjectDirectory del method to also delete all blocks belonging to that object
 			     .objName = source->get_key().get_oid(),
 			     .bucketName = source->get_bucket()->get_name()
 			   };
 
-  if (source->driver->get_obj_dir()->del(&obj, y) < 0) 
+  if (source->driver->get_obj_dir_cpp()->del(&object, y) < 0) 
     ldpp_dout(dpp, 10) << "D4NFilterObject::" << __func__ << "(): ObjectDirectory del method failed." << dendl;
 
   Attrs::iterator attrs;
@@ -1607,7 +1596,7 @@ int D4NFilterObject::D4NFilterDeleteOp::delete_obj(const DoutPrefixProvider* dpp
   return next->delete_obj(dpp, y, flags);
 }
 
-int D4NFilterWriter::sendRemote(const DoutPrefixProvider* dpp, rgw::d4n::CacheObj *object, std::string remoteCacheAddress, std::string key, bufferlist* out_bl, optional_yield y)
+int D4NFilterWriter::sendRemote(const DoutPrefixProvider* dpp, rgw::d4n::CacheObjectCpp *object, std::string remoteCacheAddress, std::string key, bufferlist* out_bl, optional_yield y)
 {
   bufferlist in_bl;
   RGWRemoteD4NGetCB cb(&in_bl);
@@ -1677,7 +1666,7 @@ int D4NFilterWriter::process(bufferlist&& data, uint64_t offset)
     off_t bl_len = bl.length();
     off_t ofs = offset;
     bool dirty = true;
-    rgw::d4n::CacheBlock block, existing_block;
+    rgw::d4n::CacheBlockCpp block, existing_block;
     auto creationTime = startTime;
     bool lsvd_used = false;
 
@@ -1689,8 +1678,8 @@ int D4NFilterWriter::process(bufferlist&& data, uint64_t offset)
     }
 
     ldpp_dout(save_dpp, 20) << "AMIN: " << __func__ << "(): prefix: "  << prefix << dendl;
-    rgw::d4n::BlockDirectory* blockDir = driver->get_block_dir();
-    rgw::d4n::ObjectDirectory* objectDir = driver->get_obj_dir();
+    rgw::d4n::RGWBlockDirectory* blockDir = driver->get_block_dir_cpp();
+    rgw::d4n::RGWObjectDirectory* objectDir = driver->get_obj_dir_cpp();
 
     block.cacheObj.bucketName = obj->get_bucket()->get_name();
     block.cacheObj.objName = obj->get_key().get_oid();
@@ -1715,7 +1704,7 @@ int D4NFilterWriter::process(bufferlist&& data, uint64_t offset)
       if (lsvd_counter == 1 && bl.length() < g_conf()->rgw_d4n_small_object_threshold){ //small object
 	lsvd_used = true;
 //      ldpp_dout(save_dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
-    	rgw::d4n::CacheObj object, existing_object;
+    	rgw::d4n::CacheObjectCpp object, existing_object;
         object.bucketName = obj->get_bucket()->get_name();
         object.objName = obj->get_key().get_oid();
         std::string oid = prefix;
@@ -1734,12 +1723,12 @@ int D4NFilterWriter::process(bufferlist&& data, uint64_t offset)
 
 	if (bl.length() > 0) {          
 	  //TODO : AMIN uncomment this
-          //ret = driver->get_lsvd_cache_driver()->put(save_dpp, prefix, bl, bl.length(), obj->get_attrs(), y);
+          ret = driver->get_lsvd_cache_driver()->put(save_dpp, prefix, bl, bl.length(), obj->get_attrs(), y);
           if (ret == 0) {
-            if (!objectDir->exist_key(&object, y)) {
+            //if (!objectDir->exist_key(&object, y)) {
               if (objectDir->set(&object, y) < 0)
   	        ldpp_dout(save_dpp, 10) << "D4NFilterObject::D4NFilterWriteOp::" << __func__ << "(): objectDirectory set method failed." << dendl;
-            } else {
+            /*} else {
               existing_object.bucketName = obj->get_bucket()->get_name();
               existing_object.objName = obj->get_key().get_oid();
               if (objectDir->get(&existing_object, y) < 0) {
@@ -1755,7 +1744,7 @@ int D4NFilterWriter::process(bufferlist&& data, uint64_t offset)
                     ldpp_dout(save_dpp, 10) << "D4NFilterObject::D4NFilterWriteOp::" << __func__ << "(): objectDirectory update_field method failed for hostsList." << dendl;
                 }
               }
-	    }
+	    }*/
           } else {
             ldpp_dout(save_dpp, 1) << "D4NFilterObject::D4NFilterWriteOp::process" << __func__ << "(): ERROR: writting data to the local LSVD cache failed!" << dendl;
 	    return ret;
@@ -1768,7 +1757,7 @@ int D4NFilterWriter::process(bufferlist&& data, uint64_t offset)
       if (lsvd_counter == 1 && bl.length() < g_conf()->rgw_d4n_small_object_threshold){ //small object
 	lsvd_used = true;
 //      ldpp_dout(save_dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
-    	rgw::d4n::CacheObj object, existing_object;
+    	rgw::d4n::CacheObjectCpp object, existing_object;
         object.bucketName = obj->get_bucket()->get_name();
         object.objName = obj->get_key().get_oid();
         std::string oid = prefix;
@@ -1789,10 +1778,10 @@ int D4NFilterWriter::process(bufferlist&& data, uint64_t offset)
 	if (bl.length() > 0) {          
 	  ret = sendRemote(save_dpp, &object, blockDir->cct->_conf->rgw_d4n_lsvd_cache_address, oid, &out_bl, y);
           if (ret == 0) {
-            if (!objectDir->exist_key(&object, y)) {
+            //if (!objectDir->exist_key(&object, y)) {
               if (objectDir->set(&object, y) < 0)
   	        ldpp_dout(save_dpp, 10) << "D4NFilterObject::D4NFilterWriteOp::" << __func__ << "(): objectDirectory set method failed." << dendl;
-            } else {
+            /*} else {
               existing_object.bucketName = obj->get_bucket()->get_name();
               existing_object.objName = obj->get_key().get_oid();
               if (objectDir->get(&existing_object, y) < 0) {
@@ -1808,7 +1797,7 @@ int D4NFilterWriter::process(bufferlist&& data, uint64_t offset)
                     ldpp_dout(save_dpp, 10) << "D4NFilterObject::D4NFilterWriteOp::" << __func__ << "(): objectDirectory update_field method failed for hostsList." << dendl;
                 }
               }
-	    }
+	    }*/
           } else {
             ldpp_dout(save_dpp, 1) << "D4NFilterObject::D4NFilterWriteOp::process" << __func__ << "(): ERROR: writting data to the remote LSVD cache failed!" << dendl;
 	    return ret;
@@ -1826,38 +1815,33 @@ int D4NFilterWriter::process(bufferlist&& data, uint64_t offset)
       block.dirty = true;
       block.hostsList.push_back(blockDir->cct->_conf->rgw_local_cache_address);
       dirty = true;
-//      ldpp_dout(save_dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << ": key is: " << key << dendl;
       ret = driver->get_policy_driver()->get_cache_policy()->eviction(save_dpp, block.size, y);
       if (ret == 0) {
         //Should we replace each put_async with put, to ensure data is actually written to the cache before updating the data structures and before the lock is released?
 	if (bl.length() > 0) {          
-	  //TODO : AMIN uncomment this
-          //ret = driver->get_cache_driver()->put(save_dpp, key, bl, bl.length(), obj->get_attrs(), y);
+          ret = driver->get_cache_driver()->put(save_dpp, key, bl, bl.length(), obj->get_attrs(), y);
           if (ret == 0) {
  	    driver->get_policy_driver()->get_cache_policy()->update(save_dpp, oid_in_cache, ofs, bl.length(), objVersion, dirty, creationTime,  obj->get_bucket()->get_owner(), y);
-            if (!blockDir->exist_key(&block, y)) {
-              if (blockDir->set(save_dpp, &block, y) < 0) //should we revert previous steps if this step fails?
+            //if (!blockDir->exist_key(&block, y)) {
+              if (blockDir->set(&block, y) < 0) //should we revert previous steps if this step fails?
   	        ldpp_dout(save_dpp, 10) << "D4NFilterObject::D4NFilterWriteOp::" << __func__ << "(): BlockDirectory set method failed." << dendl;
-            } else {
-//      ldpp_dout(save_dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
+            /*} else {
               existing_block.blockID = block.blockID;
               existing_block.size = block.size;
               if (blockDir->get(&existing_block, y) < 0) {
                 ldpp_dout(save_dpp, 10) << "Failed to fetch existing block for: " << existing_block.cacheObj.objName << " blockID: " << existing_block.blockID << " block size: " << existing_block.size << dendl;
               } else {
-//      ldpp_dout(save_dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
                 if (existing_block.version != block.version) {
                   if (blockDir->del(&existing_block, y) < 0) //delete existing block
                     ldpp_dout(save_dpp, 10) << "D4NFilterObject::D4NFilterWriteOp::" << __func__ << "(): BlockDirectory del method failed." << dendl;
-                  if (blockDir->set(save_dpp, &block, y) < 0) //new versioned block will have new version, hostsList etc, how about globalWeight?
+                  if (blockDir->set(&block, y) < 0) //new versioned block will have new version, hostsList etc, how about globalWeight?
                     ldpp_dout(save_dpp, 10) << "D4NFilterObject::D4NFilterWriteOp::" << __func__ << "(): BlockDirectory set method failed." << dendl;
                 } else {
-//      ldpp_dout(save_dpp, 20) << "AMIN: " << __func__ << "(): " << __LINE__ << dendl;
                   if (blockDir->update_field(&block, "blockHosts", blockDir->cct->_conf->rgw_local_cache_address, y) < 0)
                     ldpp_dout(save_dpp, 10) << "D4NFilterObject::D4NFilterWriteOp::" << __func__ << "(): BlockDirectory update_field method failed for hostsList." << dendl;
                 }
               }
-	    }
+	    }*/
           } else {
             ldpp_dout(save_dpp, 1) << "D4NFilterObject::D4NFilterWriteOp::process" << __func__ << "(): ERROR: writting data to the cache failed!" << dendl;
 	    return ret;
@@ -1899,9 +1883,9 @@ int D4NFilterWriter::complete(size_t accounted_size, const std::string& etag,
 
     ldpp_dout(save_dpp, 10) << "Amin: D4NFilterWriter::" << __func__ << "()" << dendl;
 
-    hostsList = { driver->get_block_dir()->cct->_conf->rgw_local_cache_address };
+    hostsList = { driver->get_block_dir_cpp()->cct->_conf->rgw_local_cache_address };
     if ((lsvd_cache_enabled == false && lsvd_cache_used == false) || (accounted_size >= g_conf()->rgw_d4n_small_object_threshold)) { 
-      rgw::d4n::CacheObj object = rgw::d4n::CacheObj{
+      rgw::d4n::CacheObjectCpp object = rgw::d4n::CacheObjectCpp{
 		 .objName = obj->get_key().get_oid(), 
 		 .bucketName = obj->get_bucket()->get_name(),
 		 .creationTime = std::to_string(creationTime), 
@@ -1913,7 +1897,7 @@ int D4NFilterWriter::complete(size_t accounted_size, const std::string& etag,
               };
 
       //TODO: check if the key exist  in the directory, if yes, uopdate it instead of set
-      if (driver->get_obj_dir()->set(&object, y) < 0) 
+      if (driver->get_obj_dir_cpp()->set(&object, y) < 0) 
         ldpp_dout(save_dpp, 10) << "D4NFilterWriter::" << __func__ << "(): ObjectDirectory set method failed." << dendl;
 
       driver->get_policy_driver()->get_cache_policy()->updateObj(save_dpp, prefix, objVersion, dirty, accounted_size, creationTime, obj->get_bucket()->get_owner(), objEtag, y);

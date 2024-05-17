@@ -130,6 +130,7 @@ class D4NFilterObject : public FilterObject {
     D4NFilterDriver* driver;
     std::string version;
     std::string prefix;
+    bool dirty = false;
 
   public:
     struct D4NFilterReadOp : FilterReadOp {
@@ -249,6 +250,9 @@ class D4NFilterObject : public FilterObject {
     void set_object_version(const std::string& version) { this->version = version; }
     const std::string get_object_version() { return this->version; }
 
+    void set_object_dirty(bool dirty) { this->dirty = dirty; }
+    bool get_object_dirty() { return this->dirty; }
+
     void set_prefix(const std::string& prefix) { this->prefix = prefix; }
     const std::string get_prefix() { return this->prefix; }
 };
@@ -290,7 +294,7 @@ class D4NFilterWriter : public FilterWriter {
                        const req_context& rctx,
                        uint32_t flags) override;
    bool is_atomic() { return atomic; };
-   int sendRemote(const DoutPrefixProvider* dpp, rgw::d4n::CacheObj *object, std::string remoteCacheAddress, std::string key, bufferlist* out_bl, optional_yield y);
+   int sendRemote(const DoutPrefixProvider* dpp, rgw::d4n::CacheObjectCpp *object, std::string remoteCacheAddress, std::string key, bufferlist* out_bl, optional_yield y);
    const DoutPrefixProvider* dpp() { return save_dpp; } 
 };
 
