@@ -71,6 +71,22 @@ target_link_libraries(ceph_test_rgw_redis_driver PRIVATE
   )
   target_link_libraries(ceph_test_rgw_redis_driver PRIVATE spawn)
 install(TARGETS ceph_test_rgw_redis_driver DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+add_executable(ceph_test_boost_redis_latency
+  boost_redis_latency.cc
+  )
+target_include_directories(ceph_test_boost_redis_latency
+  SYSTEM PRIVATE "${CMAKE_SOURCE_DIR}/src/rgw/")
+target_link_libraries(ceph_test_boost_redis_latency PRIVATE
+  rgw_common
+  librados
+  ceph-common
+  ${rgw_libs}
+  ${UNITTEST_LIBS}
+  ${EXTRALIBS}
+  )
+  target_link_libraries(ceph_test_boost_redis_latency PRIVATE spawn)
+install(TARGETS ceph_test_boost_redis_latency DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 
 #unittest_rgw_bencode
