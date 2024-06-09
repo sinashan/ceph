@@ -81,7 +81,8 @@ void RGWObjectDirectory::findClient(std::string key, cpp_redis::client *client){
   ldout(cct,10) <<__func__<<": " << __LINE__ <<  dendl;
   slot = hash_slot(key.c_str(), key.size());
   int dirMasterCount = cct->_conf->rgw_directory_master_count;
-  int slotQuota = 16383/dirMasterCount + 1; 
+  ldout(cct,10) <<__func__<<": " << __LINE__ << ": MasterCount is: " << dirMasterCount << dendl;
+  int slotQuota = 16383/dirMasterCount; 
   ldout(cct,10) <<__func__<<": " << __LINE__ <<  dendl;
 
   std::string address = cct->_conf->rgw_filter_address;
@@ -97,11 +98,24 @@ void RGWObjectDirectory::findClient(std::string key, cpp_redis::client *client){
     }
   }
   ldout(cct,10) <<__func__<<": " << __LINE__ <<  dendl;
-
+  cpp_redis::connect_state status;
   try {
     for (int i = 1; i <= dirMasterCount; i++){
+      ldout(cct,10) <<__func__<<": " << __LINE__ << ": slot is: " << slot << " slotQuota is: " << slotQuota << dendl;
       if (slot < (slotQuota*i)){
-	client->connect(host[i-1], port[i-1], nullptr,   500, 10, 1000);
+        ldout(cct,10) <<__func__<<": " << __LINE__ <<  dendl;
+	//client->connect(host[i-1], port[i-1], nullptr,   500, 10, 1000);
+	
+	client->connect(host[i-1], port[i-1], 
+	               [&status](const std::string &host, std::size_t port, cpp_redis::connect_state statusC) {
+			       if (statusC == cpp_redis::connect_state::dropped) {
+				 status = statusC;
+			       }
+	               });
+	
+        if (status == cpp_redis::connect_state::dropped)
+	  ldout(cct, 10) << "AMIN:DEBUG client disconnected from " << host[i-1] << ":" << port[i-1] << dendl;
+	
 	break;
       }
     }
@@ -116,7 +130,7 @@ void RGWBlockDirectory::findClient(std::string key, cpp_redis::client *client){
   ldout(cct,10) <<__func__<<": " << __LINE__ <<  dendl;
   slot = hash_slot(key.c_str(), key.size());
   int dirMasterCount = cct->_conf->rgw_directory_master_count;
-  int slotQuota = 16383/dirMasterCount + 1; 
+  int slotQuota = 16383/dirMasterCount; 
   ldout(cct,10) <<__func__<<": " << __LINE__ <<  dendl;
 
   std::string address = cct->_conf->rgw_filter_address;
@@ -166,6 +180,7 @@ int RGWObjectDirectory::exist_key(CacheObjectCpp *ptr){
   cpp_redis::client client;
   findClient(key, &client);
   if (!(client.is_connected())){
+    ldout(cct,10) << __func__ << ": " << __LINE__ << " Redis client is not connected!" << dendl;
     return -1;
   }
   try {
@@ -176,12 +191,14 @@ int RGWObjectDirectory::exist_key(CacheObjectCpp *ptr){
         result = reply.as_integer();
     });
     client.sync_commit(std::chrono::milliseconds(1000));
+    ldout(cct,10) << __func__ << ": " << __LINE__ << dendl;
   }
   catch(std::exception &e) {
     result =  0;
+    ldout(cct,10) << __func__ << ": " << __LINE__ << ": key " << key <<" result:" <<result <<dendl;
   }
   
-  ldout(cct,10) << __func__ << "  key " << key <<" result:" <<result <<dendl;
+  ldout(cct,10) << __func__ << ": " << __LINE__ << ": key " << key <<" result:" <<result <<dendl;
   return result;
 }
 
@@ -208,6 +225,7 @@ int RGWBlockDirectory::exist_key(CacheBlockCpp *ptr)
   catch(std::exception &e) {
     ldout(cct,10) << __func__ << " Error" << " key " << key << dendl;
   }
+  
   return result;
 }
 
@@ -608,22 +626,34 @@ int RGWBlockDirectory::del(CacheBlockCpp *ptr, optional_yield y)
 
 int RGWObjectDirectory::get(CacheObjectCpp *ptr, optional_yield y)
 {
-  cpp_redis::client client;
+  ldout(cct,10) <<__func__<<": " << __LINE__ <<  dendl;
   std::string key = buildIndex(ptr);
-  ldout(cct,10) << __func__ << ": " << __LINE__<< ": object: "<< key << dendl;
-  try{
-    findClient(key, &client);
-    ldout(cct,10) << __func__ << " object findclient func"<< key << dendl;
+  ldout(cct,10) <<__func__<<": " << __LINE__ << " key is: " << key <<  dendl;
+  cpp_redis::client client;
+  findClient(key, &client);
+  if (!(client.is_connected())){
+	return -1;
   }
-  catch(std::exception &e) {
-      return -EINVAL;
-  }
-  if (!client.is_connected()){
-	return -EINVAL;
-  }
+  ldout(cct,10) <<__func__<<": " << __LINE__ <<  dendl;
+  std::string result;
+  int exist = 0;
+  ldout(cct,10) <<__func__<<": " << __LINE__ <<  dendl;
 
-  ldout(cct,10) << __func__ << ": " << __LINE__<< ": object: "<< key << dendl;
-  if (exist_key(ptr)){
+  std::vector<std::string> keys;
+  keys.push_back(key);
+    
+  client.exists(keys, [&exist](cpp_redis::reply &reply){
+	 	if (reply.is_integer()){
+		  exist = reply.as_integer();
+		}
+	});
+	client.sync_commit(std::chrono::milliseconds(300));
+
+  ldout(cct,10) <<__func__<<": " << __LINE__ <<  ": exist: " << exist << dendl;
+	
+  if (exist) {
+  //if (exist_key(ptr)){
+    ldout(cct,10) << __func__ << ": " << __LINE__<< ": object: "<< key << " exists in directory!" << dendl;
     try{
 	std::string obj_name;
 	std::string bucket_name;
@@ -634,8 +664,6 @@ int RGWObjectDirectory::get(CacheObjectCpp *ptr, optional_yield y)
 	std::string in_lsvd;
 	std::string objHosts;
 	std::string attrs;
-
-
 
 	//fields will be filled by the redis hmget functoin
 	std::vector<std::string> fields;
@@ -666,10 +694,13 @@ int RGWObjectDirectory::get(CacheObjectCpp *ptr, optional_yield y)
 	  }
 	});
 
+  ldout(cct,10) << __func__ << ": " << __LINE__<< ": object: "<< key << dendl;
 	client.sync_commit(std::chrono::milliseconds(1000));
+  ldout(cct,10) << __func__ << ": " << __LINE__<< ": object: "<< key << dendl;
 	  
 	std::stringstream sloction(objHosts);
 	std::string tmp;
+  ldout(cct,10) << __func__ << ": " << __LINE__<< ": object: "<< key << dendl;
 	
 	ptr->objName = obj_name;
 	ptr->bucketName = bucket_name;
@@ -678,6 +709,7 @@ int RGWObjectDirectory::get(CacheObjectCpp *ptr, optional_yield y)
 	//host1_host2_host3_...
 	while(getline(sloction, tmp, '_'))
 	  ptr->hostsList.push_back(tmp);
+  ldout(cct,10) << __func__ << ": " << __LINE__<< ": object: "<< key << dendl;
 
 	ptr->version = version;
 	ptr->size = std::stoull(size);
@@ -693,8 +725,10 @@ int RGWObjectDirectory::get(CacheObjectCpp *ptr, optional_yield y)
     }
   }
   else{
+  ldout(cct,10) << __func__ << ": " << __LINE__<< ": object: "<< key << dendl;
     return -ENOENT;  
   }
+  ldout(cct,10) << __func__ << ": " << __LINE__<< ": object: "<< key << dendl;
   return 0;
 }
 
@@ -703,19 +737,30 @@ int RGWBlockDirectory::get(CacheBlockCpp *ptr, optional_yield y)
   cpp_redis::client client;
   std::string key = buildIndex(ptr);
   ldout(cct,10) << __func__ << " object in func getValue "<< key << dendl;
-  try{
-    findClient(key, &client);
-    ldout(cct,10) << __func__ << " object findclient func"<< key << dendl;
-  }
-  catch(std::exception &e) {
-      return -EINVAL;
-  }
-  if (!client.is_connected()){
-	return -EINVAL;
-  }
 
-  ldout(cct,10) << __func__ << " object af2 in func getValue "<< key << dendl;
-  if (exist_key(ptr)){
+  findClient(key, &client);
+  if (!(client.is_connected())){
+	return -1;
+  }
+  ldout(cct,10) <<__func__<<": " << __LINE__ <<  dendl;
+  std::string result;
+  int exist = 0;
+  ldout(cct,10) <<__func__<<": " << __LINE__ <<  dendl;
+
+  std::vector<std::string> keys;
+  keys.push_back(key);
+    
+  client.exists(keys, [&exist](cpp_redis::reply &reply){
+	 	if (reply.is_integer()){
+		  exist = reply.as_integer();
+		}
+	});
+	client.sync_commit(std::chrono::milliseconds(1000));
+
+  ldout(cct,10) <<__func__<<": " << __LINE__ <<  ": exist: " << exist << dendl;
+	
+  if (exist) {
+  //if (exist_key(ptr)){
     try{
 	std::string blockID;
 	std::string version;
@@ -795,22 +840,34 @@ int RGWBlockDirectory::get(CacheBlockCpp *ptr, optional_yield y)
 
 int RGWObjectDirectory::get_attr(CacheObjectCpp *ptr, const char* name, bufferlist &dest, optional_yield y)
 {
-  cpp_redis::client client;
+  ldout(cct,10) <<__func__<<": " << __LINE__ <<  dendl;
   std::string key = buildIndex(ptr);
-  ldout(cct,10) << __func__ << " object in func get "<< key << dendl;
-  try{
-    findClient(key, &client);
-    ldout(cct,10) << __func__ << " object findclient func"<< key << dendl;
+  ldout(cct,10) <<__func__<<": " << __LINE__ << " key is: " << key <<  dendl;
+  cpp_redis::client client;
+  findClient(key, &client);
+  if (!(client.is_connected())){
+	return -1;
   }
-  catch(std::exception &e) {
-      return -EINVAL;
-  }
-  if (!client.is_connected()){
-	return -EINVAL;
-  }
+  ldout(cct,10) <<__func__<<": " << __LINE__ <<  dendl;
+  std::string result;
+  int exist = 0;
+  ldout(cct,10) <<__func__<<": " << __LINE__ <<  dendl;
 
-  ldout(cct,10) << __func__ << ": " << __LINE__<< ": object: "<< key << dendl;
-  if (exist_key(ptr)){
+  std::vector<std::string> keys;
+  keys.push_back(key);
+    
+  client.exists(keys, [&exist](cpp_redis::reply &reply){
+	 	if (reply.is_integer()){
+		  exist = reply.as_integer();
+		}
+	});
+	client.sync_commit(std::chrono::milliseconds(1000));
+
+  ldout(cct,10) <<__func__<<": " << __LINE__ <<  ": exist: " << exist << dendl;
+	
+  if (exist) {
+  //if (exist_key(ptr)){
+    ldout(cct,10) << __func__ << ": " << __LINE__<< ": object: "<< key << dendl;
     try{
 	std::string value;
 	std::vector<std::string> fields;
@@ -835,9 +892,11 @@ int RGWObjectDirectory::get_attr(CacheObjectCpp *ptr, const char* name, bufferli
     }
   }
   else{
+    ldout(cct,10) << __func__ << ": " << __LINE__<< ": object: "<< key << dendl;
     return -ENOENT;  
   }
+  ldout(cct,10) << __func__ << ": " << __LINE__<< ": object: "<< key << dendl;
   return 0;
 }
 
-} } 
+} }

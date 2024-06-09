@@ -141,6 +141,8 @@ class D4NFilterObject : public FilterObject {
 	    D4NFilterObject* source;
 	    RGWGetDataCB* client_cb;
 	    uint64_t ofs = 0, len = 0;
+	    uint64_t read_ofs = 0;
+	    bool first_block{true};
 	    bufferlist bl_rem;
 	    bool last_part{false};
 	    bool write_to_cache{true};
@@ -158,6 +160,8 @@ class D4NFilterObject : public FilterObject {
               this->y = y;
             }
 	    void set_ofs(uint64_t ofs) { this->ofs = ofs; }
+	    void set_read_ofs(uint64_t ofs) { this->read_ofs = ofs; }
+	    void set_first_block(bool val) { this->first_block = val; }
 	    int flush_last_part();
 	    void bypass_cache_write() { this->write_to_cache = false; }
 	};
@@ -191,6 +195,11 @@ class D4NFilterObject : public FilterObject {
 	uint64_t offset = 0; // next offset to write to client
         rgw::AioResultList completed; // completed read results, sorted by offset
         std::unordered_map<uint64_t, std::pair<uint64_t,uint64_t>> blocks_info;
+
+	uint64_t read_ofs = 0; // offset to read in the first block
+	bool first_block = true; //is it first_block
+	void set_read_ofs(uint64_t ofs) {read_ofs = ofs;}
+	void set_first_block(bool val) {first_block = val;}
 
 	int flush(const DoutPrefixProvider* dpp, rgw::AioResultList&& results, optional_yield y);
 	int lsvdFlush(const DoutPrefixProvider* dpp, rgw::AioResultList&& results, optional_yield y);
