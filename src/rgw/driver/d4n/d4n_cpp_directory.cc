@@ -190,7 +190,7 @@ int RGWObjectDirectory::exist_key(CacheObjectCpp *ptr){
       if (reply.is_integer())
         result = reply.as_integer();
     });
-    client.sync_commit(std::chrono::milliseconds(1000));
+    client.sync_commit(std::chrono::milliseconds(300));
     ldout(cct,10) << __func__ << ": " << __LINE__ << dendl;
   }
   catch(std::exception &e) {
@@ -219,7 +219,7 @@ int RGWBlockDirectory::exist_key(CacheBlockCpp *ptr)
       if (reply.is_integer())
 	 result = reply.as_integer();
     });
-    client.sync_commit(std::chrono::milliseconds(1000));
+    client.sync_commit(std::chrono::milliseconds(300));
     ldout(cct,10) << __func__ << " res dir " << result << " key " << key <<  dendl;
   }
   catch(std::exception &e) {
@@ -255,7 +255,7 @@ int RGWObjectDirectory::set(CacheObjectCpp *ptr, optional_yield y)
 		  exist = reply.as_integer();
 		}
 	});
-	client.sync_commit(std::chrono::milliseconds(1000));
+	client.sync_commit(std::chrono::milliseconds(300));
   }
   catch(std::exception &e) {
     exist = 0;
@@ -294,7 +294,7 @@ int RGWObjectDirectory::set(CacheObjectCpp *ptr, optional_yield y)
  	result = reply.as_string();
     });
 
-    client.sync_commit(std::chrono::milliseconds(1000));
+    client.sync_commit(std::chrono::milliseconds(300));
     if (result.find("OK") != std::string::npos)
       ldout(cct,10) <<__func__<<" new key res  " << result <<dendl;
     else
@@ -311,7 +311,7 @@ int RGWObjectDirectory::set(CacheObjectCpp *ptr, optional_yield y)
 	    old_val = arr[0].as_string();
 	}
       });
-      client.sync_commit(std::chrono::milliseconds(1000));
+      client.sync_commit(std::chrono::milliseconds(300));
     }
     catch(std::exception &e) {
       return 0;
@@ -327,7 +327,7 @@ int RGWObjectDirectory::set(CacheObjectCpp *ptr, optional_yield y)
  	  result = reply.as_string();
         });
 
-      client.sync_commit(std::chrono::milliseconds(1000));
+      client.sync_commit(std::chrono::milliseconds(300));
 	  
       ldout(cct,10) <<__func__<<" after hmset " << key << " updated hostslist: " << old_val <<dendl;
     }
@@ -357,7 +357,7 @@ int RGWBlockDirectory::set(CacheBlockCpp *ptr, optional_yield y)
 		  exist = reply.as_integer();
 		}
 	});
-	client.sync_commit(std::chrono::milliseconds(1000));
+	client.sync_commit(std::chrono::milliseconds(300));
   }
   catch(std::exception &e) {
     exist = 0;
@@ -392,7 +392,7 @@ int RGWBlockDirectory::set(CacheBlockCpp *ptr, optional_yield y)
  	result = reply.as_string();
     });
 
-    client.sync_commit(std::chrono::milliseconds(1000));
+    client.sync_commit(std::chrono::milliseconds(300));
     if (result.find("OK") != std::string::npos)
       ldout(cct,10) <<__func__<<" new key res  " << result <<dendl;
     else
@@ -409,7 +409,7 @@ int RGWBlockDirectory::set(CacheBlockCpp *ptr, optional_yield y)
 	    old_val = arr[0].as_string();
 	}
       });
-      client.sync_commit(std::chrono::milliseconds(1000));
+      client.sync_commit(std::chrono::milliseconds(300));
     }
     catch(std::exception &e) {
       return 0;
@@ -425,7 +425,7 @@ int RGWBlockDirectory::set(CacheBlockCpp *ptr, optional_yield y)
  	  result = reply.as_string();
         });
 
-      client.sync_commit(std::chrono::milliseconds(1000));
+      client.sync_commit(std::chrono::milliseconds(300));
 	  
       ldout(cct,10) <<__func__<<" after hmset " << key << " updated hostslist: " << old_val <<dendl;
     }
@@ -455,7 +455,7 @@ int RGWObjectDirectory::update_field(CacheObjectCpp *ptr, std::string field, std
 		  exist = reply.as_integer();
 		}
 	});
-	client.sync_commit(std::chrono::milliseconds(1000));
+	client.sync_commit(std::chrono::milliseconds(300));
   }
   catch(std::exception &e) {
     exist = 0;
@@ -477,7 +477,7 @@ int RGWObjectDirectory::update_field(CacheObjectCpp *ptr, std::string field, std
 	      old_val = arr[0].as_string();
 	  }
         });
-        client.sync_commit(std::chrono::milliseconds(1000));
+        client.sync_commit(std::chrono::milliseconds(300));
       }
       catch(std::exception &e) {
         return 0;
@@ -496,7 +496,7 @@ int RGWObjectDirectory::update_field(CacheObjectCpp *ptr, std::string field, std
       if (!reply.is_null())
  	result = reply.as_string();
     });
-    client.sync_commit(std::chrono::milliseconds(1000));	  
+    client.sync_commit(std::chrono::milliseconds(300));	  
   }
 
   return 0;
@@ -525,7 +525,7 @@ int RGWBlockDirectory::update_field(CacheBlockCpp *ptr, std::string field, std::
 		  exist = reply.as_integer();
 		}
 	});
-	client.sync_commit(std::chrono::milliseconds(1000));
+	client.sync_commit(std::chrono::milliseconds(300));
   }
   catch(std::exception &e) {
     exist = 0;
@@ -547,7 +547,7 @@ int RGWBlockDirectory::update_field(CacheBlockCpp *ptr, std::string field, std::
 	      old_val = arr[0].as_string();
 	  }
         });
-        client.sync_commit(std::chrono::milliseconds(1000));
+        client.sync_commit(std::chrono::milliseconds(300));
       }
       catch(std::exception &e) {
         return 0;
@@ -566,7 +566,7 @@ int RGWBlockDirectory::update_field(CacheBlockCpp *ptr, std::string field, std::
       if (!reply.is_null())
  	result = reply.as_string();
     });
-    client.sync_commit(std::chrono::milliseconds(1000));	  
+    client.sync_commit(std::chrono::milliseconds(300));	  
   }
 
   return 0;
@@ -588,7 +588,7 @@ int RGWObjectDirectory::del(CacheObjectCpp *ptr, optional_yield y)
 		if  (reply.is_integer())
 		{result = reply.as_integer();}
 		});
-	client.sync_commit(std::chrono::milliseconds(1000));	
+	client.sync_commit(std::chrono::milliseconds(300));	
 	ldout(cct,10) << __func__ << "DONE" << dendl;
 	return result-1;
   }
@@ -614,7 +614,7 @@ int RGWBlockDirectory::del(CacheBlockCpp *ptr, optional_yield y)
 		if  (reply.is_integer())
 		{result = reply.as_integer();}
 		});
-	client.sync_commit(std::chrono::milliseconds(1000));	
+	client.sync_commit(std::chrono::milliseconds(300));	
 	ldout(cct,10) << __func__ << "DONE" << dendl;
 	return result-1;
   }
@@ -695,7 +695,7 @@ int RGWObjectDirectory::get(CacheObjectCpp *ptr, optional_yield y)
 	});
 
   ldout(cct,10) << __func__ << ": " << __LINE__<< ": object: "<< key << dendl;
-	client.sync_commit(std::chrono::milliseconds(1000));
+	client.sync_commit(std::chrono::milliseconds(300));
   ldout(cct,10) << __func__ << ": " << __LINE__<< ": object: "<< key << dendl;
 	  
 	std::stringstream sloction(objHosts);
@@ -755,7 +755,7 @@ int RGWBlockDirectory::get(CacheBlockCpp *ptr, optional_yield y)
 		  exist = reply.as_integer();
 		}
 	});
-	client.sync_commit(std::chrono::milliseconds(1000));
+	client.sync_commit(std::chrono::milliseconds(300));
 
   ldout(cct,10) <<__func__<<": " << __LINE__ <<  ": exist: " << exist << dendl;
 	
@@ -803,7 +803,7 @@ int RGWBlockDirectory::get(CacheBlockCpp *ptr, optional_yield y)
 	  }
 	});
 
-	client.sync_commit(std::chrono::milliseconds(1000));
+	client.sync_commit(std::chrono::milliseconds(300));
 	  
 	std::stringstream sloction(blockHosts);
 	std::string tmp;
@@ -861,7 +861,7 @@ int RGWObjectDirectory::get_attr(CacheObjectCpp *ptr, const char* name, bufferli
 		  exist = reply.as_integer();
 		}
 	});
-	client.sync_commit(std::chrono::milliseconds(1000));
+	client.sync_commit(std::chrono::milliseconds(300));
 
   ldout(cct,10) <<__func__<<": " << __LINE__ <<  ": exist: " << exist << dendl;
 	
@@ -883,7 +883,7 @@ int RGWObjectDirectory::get_attr(CacheObjectCpp *ptr, const char* name, bufferli
 	  }
 	});
 
-	client.sync_commit(std::chrono::milliseconds(1000));
+	client.sync_commit(std::chrono::milliseconds(300));
 	dest.append(value);
     }
     catch(std::exception &e) {
