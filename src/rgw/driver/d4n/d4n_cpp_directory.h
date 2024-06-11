@@ -30,6 +30,7 @@ struct CacheBlockCpp {
   std::string version;
   bool dirty;
   uint64_t size; /* Block size in bytes */
+  bool in_lsvd = false; /* is it in LSVD cache? */
   int globalWeight = 0; /* LFUDA policy variable */
   std::vector<std::string> hostsList; /* List of hostnames <ip:port> of block locations */
 };

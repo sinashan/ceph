@@ -130,6 +130,7 @@ class D4NFilterObject : public FilterObject {
     D4NFilterDriver* driver;
     std::string version;
     std::string prefix;
+    std::string creationTime;
     bool dirty = false;
 
   public:
@@ -167,7 +168,7 @@ class D4NFilterObject : public FilterObject {
 	};
 
 	D4NFilterObject* source;
-	bufferlist received_data; //for remote cached data
+	//bufferlist received_data; //for remote cached data
 	//D4NGetObjectCB* remote_cb;
 
 	D4NFilterReadOp(std::unique_ptr<ReadOp> _next, D4NFilterObject* _source) : FilterReadOp(std::move(_next)),
@@ -176,19 +177,19 @@ class D4NFilterObject : public FilterObject {
           cb = std::make_unique<D4NFilterGetCB>(source->driver, source);
 	}
 	virtual ~D4NFilterReadOp() = default;
-	int getRemote(const DoutPrefixProvider* dpp, std::string key, std::string remoteCacheAddress, optional_yield y);
+	int findLocation(const DoutPrefixProvider* dpp, rgw::d4n::CacheBlockCpp *block, optional_yield y);
+	int getRemote(const DoutPrefixProvider* dpp, std::string key, std::string remoteCacheAddress, bufferlist *bl, optional_yield y);
 	virtual int prepare(optional_yield y, const DoutPrefixProvider* dpp) override;
 	virtual int iterate(const DoutPrefixProvider* dpp, int64_t ofs, int64_t end,
 	  RGWGetDataCB* cb, optional_yield y) override;
-	int iterateRemote(const DoutPrefixProvider* dpp, int64_t ofs, int64_t end,
-                        RGWGetDataCB* cb, optional_yield y); 
+	//int iterateRemote(const DoutPrefixProvider* dpp, int64_t ofs, int64_t end, RGWGetDataCB* cb, optional_yield y); 
 	int iterateLSVD(const DoutPrefixProvider* dpp, int64_t ofs, int64_t end,
                         RGWGetDataCB* cb, optional_yield y);
 	virtual int get_attr(const DoutPrefixProvider* dpp, const char* name, bufferlist& dest, optional_yield y) override;
 
       private:
 	char cached_local = 0;
-	std::string cacheLocation; 
+	//std::string cacheLocation; 
 	RGWGetDataCB* client_cb;
 	std::unique_ptr<D4NFilterGetCB> cb;
         std::unique_ptr<rgw::Aio> aio;
@@ -203,7 +204,8 @@ class D4NFilterObject : public FilterObject {
 
 	int flush(const DoutPrefixProvider* dpp, rgw::AioResultList&& results, optional_yield y);
 	int lsvdFlush(const DoutPrefixProvider* dpp, rgw::AioResultList&& results, optional_yield y);
-	int remoteFlush(const DoutPrefixProvider* dpp, int64_t ofs, int64_t end, RGWGetDataCB* cb, optional_yield y);
+	int remoteFlush(const DoutPrefixProvider* dpp, bufferlist bl, std::string creationTime, optional_yield y);
+	//int remoteFlush(const DoutPrefixProvider* dpp, int64_t ofs, int64_t end, RGWGetDataCB* cb, optional_yield y);
 	void cancel();
 	int drain(const DoutPrefixProvider* dpp, optional_yield y);
 	int lsvdDrain(const DoutPrefixProvider* dpp, optional_yield y);
@@ -264,6 +266,9 @@ class D4NFilterObject : public FilterObject {
 
     void set_prefix(const std::string& prefix) { this->prefix = prefix; }
     const std::string get_prefix() { return this->prefix; }
+
+    void set_creationTime(std::string creationTime) { this->creationTime = creationTime; }
+    std::string get_creationTime() { return this->creationTime; }
 };
 
 class D4NFilterWriter : public FilterWriter {
