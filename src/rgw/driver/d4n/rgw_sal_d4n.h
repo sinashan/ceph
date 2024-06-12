@@ -178,7 +178,7 @@ class D4NFilterObject : public FilterObject {
 	}
 	virtual ~D4NFilterReadOp() = default;
 	int findLocation(const DoutPrefixProvider* dpp, rgw::d4n::CacheBlockCpp *block, optional_yield y);
-	int getRemote(const DoutPrefixProvider* dpp, std::string key, std::string remoteCacheAddress, bufferlist *bl, optional_yield y);
+	int getRemote(const DoutPrefixProvider* dpp, std::string block_name, std::string key, std::string remoteCacheAddress, bufferlist *bl, optional_yield y);
 	virtual int prepare(optional_yield y, const DoutPrefixProvider* dpp) override;
 	virtual int iterate(const DoutPrefixProvider* dpp, int64_t ofs, int64_t end,
 	  RGWGetDataCB* cb, optional_yield y) override;

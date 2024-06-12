@@ -15,6 +15,7 @@
 
 #include "rgw_sal_d4n.h"
 #include "rgw_rest_remoted4n.h"
+#include "rgw_common.h"
 
 namespace rgw { namespace sal {
 
@@ -455,7 +456,7 @@ int D4NFilterObject::D4NFilterReadOp::get_attr(const DoutPrefixProvider* dpp, co
   return 0;
 }
 
-int D4NFilterObject::D4NFilterReadOp::getRemote(const DoutPrefixProvider* dpp, std::string key, std::string remoteCacheAddress, bufferlist *bl, optional_yield y)
+int D4NFilterObject::D4NFilterReadOp::getRemote(const DoutPrefixProvider* dpp, std::string block_name, std::string key, std::string remoteCacheAddress, bufferlist *bl, optional_yield y)
 {
   RGWAccessKey accessKey;
   std::unique_ptr<rgw::sal::User> c_user = source->driver->get_user(source->get_bucket()->get_owner());
@@ -478,8 +479,15 @@ int D4NFilterObject::D4NFilterReadOp::getRemote(const DoutPrefixProvider* dpp, s
   D4NGetObjectCB cb(bl);
 
   auto sender = new RGWRESTStreamRWRequest(dpp->get_cct(), "GET", remoteCacheAddress, &cb, NULL, NULL, "", host_style);
+  
+  string urlsafe_bucket, urlsafe_block, resource;
+  url_encode(source->get_obj().bucket.get_key(':', 0), urlsafe_bucket);
+  url_encode(block_name, urlsafe_block, false);
 
-  ret = sender->send_request(dpp, accessKey, extra_headers, source->get_obj(), nullptr);
+  resource = urlsafe_bucket + "/" + urlsafe_block;
+
+  //ret = sender->send_request(dpp, accessKey, extra_headers, source->get_obj(), nullptr);
+  ret = sender->send_request(dpp, &accessKey, extra_headers, resource, nullptr);
   if (ret < 0) {                                                                                      
     delete sender;                                                                                       
     return ret;                                                                                       
@@ -507,11 +515,11 @@ int D4NFilterObject::D4NFilterReadOp::prepare(optional_yield y, const DoutPrefix
   object.bucketName = source->get_bucket()->get_name();
   retDir = source->driver->get_obj_dir_cpp()->get(&object, y);
 
-  ldpp_dout(dpp, 20) << "AMIN: D4NFilterObject:" << __func__ << ": object size is: "  << object.size << dendl;
   //TODO: we have to check object's size and if it is small send a request to LSVD cache
 
   //the object is cached some where; local or remote.
   if (retDir == 0){
+    ldpp_dout(dpp, 20) << "AMIN: D4NFilterObject:" << __func__ << ": object size is: "  << object.size << dendl;
     source->set_obj_size(object.size);
     source->set_object_version(object.version);
     source->set_object_dirty(object.dirty);
@@ -526,6 +534,7 @@ int D4NFilterObject::D4NFilterReadOp::prepare(optional_yield y, const DoutPrefix
     }
     source->set_prefix(prefix);
     cached_local = 1; //it is cached
+    return 0;
   }
 
 
@@ -1250,7 +1259,7 @@ int D4NFilterObject::D4NFilterReadOp::findLocation(const DoutPrefixProvider* dpp
 {
 //  ldpp_dout(dpp, 20) << "AMIN: D4NFilterObject:" << __func__ << dendl;
   int retDir;
-  //int cached_local = 4;
+  cached_local = 4;
   std::string localCache = g_conf()->rgw_local_cache_address;
   //rgw::d4n::CacheObjectCpp object;
   //object.objName = source->get_key().get_oid();
@@ -1289,6 +1298,7 @@ int D4NFilterObject::D4NFilterReadOp::findLocation(const DoutPrefixProvider* dpp
       if (block->size < g_conf()->rgw_d4n_small_object_threshold){
 	if (block->in_lsvd == true){
 	  if (g_conf()->rgw_d4n_lsvd_use_enabled == true){ //if we have a LSVD server somewhere
+            ldpp_dout(dpp, 20) << "AMIN: D4NFilterObject:" << __func__ << ": " << __LINE__ << dendl;
       	    cached_local = 3; //remote_lsvd
 	    //TODO: when we have more lsvd servers, we should hash the name and based on it
 	    // find the lsvd cache address.
@@ -1297,6 +1307,7 @@ int D4NFilterObject::D4NFilterReadOp::findLocation(const DoutPrefixProvider* dpp
 	}
 	else{
 	  cached_local = 4;
+          ldpp_dout(dpp, 20) << "AMIN: D4NFilterObject:" << __func__ << ": " << __LINE__ << dendl;
           //cacheLocation = object.hostsList.back(); //we read the object from the last cache accessing it
 	}
     	//source->set_obj_size(object.size);
@@ -1309,6 +1320,7 @@ int D4NFilterObject::D4NFilterReadOp::findLocation(const DoutPrefixProvider* dpp
       //find the best remote cache to read from (network, cache usage, ...)
       //TODO: we should insert ILP algorithm here
       if (cached_local == 4){ //remote big object
+        ldpp_dout(dpp, 20) << "AMIN: D4NFilterObject:" << __func__ << ": " << __LINE__ << dendl;
     	//source->set_obj_size(object.size);
     	//source->set_object_version(object.version);
     	//source->set_object_dirty(object.dirty);
@@ -1318,7 +1330,10 @@ int D4NFilterObject::D4NFilterReadOp::findLocation(const DoutPrefixProvider* dpp
       }
     }
   }
-  return retDir;
+  else{
+    cached_local = 0;
+    return retDir;
+  }
 }
 
 
@@ -1338,6 +1353,7 @@ int D4NFilterObject::D4NFilterReadOp::iterate(const DoutPrefixProvider* dpp, int
   std::string version = source->get_object_version();
   std::string prefix;
 
+  ldpp_dout(dpp, 20) << "D4NFilterObject::iterate:: " << "cached_local: " << std::to_string(cached_local) << dendl;
   if (cached_local == 0){
     std::string bucketName = source->get_bucket()->get_name();
     std::string objName = source->get_key().get_oid();
@@ -1421,10 +1437,6 @@ int D4NFilterObject::D4NFilterReadOp::iterate(const DoutPrefixProvider* dpp, int
     block.blockID = adjusted_start_ofs;
     block.size = part_len;
 
-    cached_local = findLocation(dpp, &block, y);
-
-    ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " <<  __LINE__ << " adjusted ofs is: " << adjusted_start_ofs <<  dendl;
-
     if (dirty == true) 
       key = "D_" + oid_in_cache; //we keep track of dirty data in the cache for the metadata failure case
 
@@ -1434,13 +1446,21 @@ int D4NFilterObject::D4NFilterReadOp::iterate(const DoutPrefixProvider* dpp, int
     if (start_part_num == 0)
       this->set_first_block(true);
 
-    std::string cacheLocation;
+
     int ret = 0;
+    ret = findLocation(dpp, &block, y);
+    if (ret < 0){
+      break;
+    }
+
+    ldpp_dout(dpp, 20) << "AMIN:DEBUG" << __func__ << "(): " <<  __LINE__ << " *********** cache location is: " << std::to_string(cached_local) << dendl;
+
+    ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " <<  __LINE__ << " adjusted ofs is: " << adjusted_start_ofs <<  dendl;
+
+    std::string cacheLocation;
     ceph::bufferlist bl;
 
     ldpp_dout(dpp, 20) << "D4NFilterObject::iterate:: " << __func__ << "(): " << __LINE__ << " key=" << key << dendl;
-    ldpp_dout(dpp, 20) << "AMIN:DEBUG" << __func__ << "(): " <<  __LINE__ << " read_ofs is: " << read_ofs << dendl;
-    ldpp_dout(dpp, 20) << "AMIN:DEBUG" << __func__ << "(): " <<  __LINE__ << " id is: " << id << dendl;
 
     if (cached_local == 1){ //local cache
       ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " <<  __LINE__ << " Local Cache" <<  dendl;
@@ -1469,7 +1489,7 @@ int D4NFilterObject::D4NFilterReadOp::iterate(const DoutPrefixProvider* dpp, int
     else if (cached_local == 3){ //remote lsvd
       ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " <<  __LINE__ << " Remote LSVD" <<  dendl;
       cacheLocation = g_conf()->rgw_d4n_lsvd_cache_address;
-      ret = getRemote(dpp, source->get_key().get_oid(), cacheLocation, &bl, y); //send it to the remote cache
+      ret = getRemote(dpp, key, source->get_key().get_oid(), cacheLocation, &bl, y); //send it to the remote cache
       if (ret < 0){
         ldpp_dout(dpp, 20) << "D4NFilterObject::iterate:: " << __func__ << "(): Error: failed to read from Remote LSVD, r= " << ret << dendl;
 	return ret;
@@ -1479,12 +1499,12 @@ int D4NFilterObject::D4NFilterReadOp::iterate(const DoutPrefixProvider* dpp, int
     else if (cached_local == 4){ //remote cache
       ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " <<  __LINE__ << " Remote Cache" <<  dendl;
       cacheLocation = block.hostsList.back(); //we read the object from the last cache accessing it
-      ret = getRemote(dpp, source->get_key().get_oid(), cacheLocation, &bl, y); //send it to the remote cache //TODO: we should read block not object
+      ret = getRemote(dpp, key, source->get_key().get_oid(), cacheLocation, &bl, y); //send it to the remote cache
       if (ret < 0){
         ldpp_dout(dpp, 20) << "D4NFilterObject::iterate:: " << __func__ << "(): Error: failed to read from Remote Cache, r= " << ret << dendl;
 	return ret;
       }
-      ret = remoteFlush(dpp, bl, source->get_creationTime(), y); //TODO
+      return remoteFlush(dpp, bl, source->get_creationTime(), y); 
     }
     else{ //backend
       break; //TODO: what if one block is cached somewhere?
@@ -1519,7 +1539,7 @@ int D4NFilterObject::D4NFilterReadOp::iterate(const DoutPrefixProvider* dpp, int
   this->cb->set_ofs(adjusted_start_ofs);
 
   ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " <<  __LINE__ << " ofs is: " << ofs << " end is: " << end << dendl;
-  ret = next->iterate(dpp, adjusted_start_ofs, len, this->cb.get(), y);
+  auto ret = next->iterate(dpp, adjusted_start_ofs, end, this->cb.get(), y);
   
   if (ret < 0) {
     ldpp_dout(dpp, 20) << "D4NFilterObject::iterate:: " << __func__ << "(): Error: failed to fetch object from backend store, r= " << ret << dendl;
