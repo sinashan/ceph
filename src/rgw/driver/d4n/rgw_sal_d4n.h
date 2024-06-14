@@ -132,6 +132,7 @@ class D4NFilterObject : public FilterObject {
     std::string prefix;
     std::string creationTime;
     bool dirty = false;
+    Attrs attrs_d4n;
 
   public:
     struct D4NFilterReadOp : FilterReadOp {
@@ -178,7 +179,7 @@ class D4NFilterObject : public FilterObject {
 	}
 	virtual ~D4NFilterReadOp() = default;
 	int findLocation(const DoutPrefixProvider* dpp, rgw::d4n::CacheBlockCpp *block, optional_yield y);
-	int getRemote(const DoutPrefixProvider* dpp, std::string block_name, std::string key, std::string remoteCacheAddress, bufferlist *bl, optional_yield y);
+	int getRemote(const DoutPrefixProvider* dpp, long long start, long long end, std::string key, std::string remoteCacheAddress, bufferlist *bl, optional_yield y);
 	virtual int prepare(optional_yield y, const DoutPrefixProvider* dpp) override;
 	virtual int iterate(const DoutPrefixProvider* dpp, int64_t ofs, int64_t end,
 	  RGWGetDataCB* cb, optional_yield y) override;
@@ -269,6 +270,9 @@ class D4NFilterObject : public FilterObject {
 
     void set_creationTime(std::string creationTime) { this->creationTime = creationTime; }
     std::string get_creationTime() { return this->creationTime; }
+
+    void set_object_attrs(Attrs attrs) { this->attrs_d4n = attrs; }
+    Attrs get_object_attrs() { return this->attrs_d4n; }
 };
 
 class D4NFilterWriter : public FilterWriter {
