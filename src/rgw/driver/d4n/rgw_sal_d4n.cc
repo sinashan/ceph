@@ -166,28 +166,11 @@ std::unique_ptr<Object> D4NFilterBucket::get_object(const rgw_obj_key& k)
   return std::make_unique<D4NFilterObject>(std::move(o), this, filter);
 }
 
-int D4NFilterDriver::load_bucket(const DoutPrefixProvider* dpp, const rgw_bucket& b,
-                              std::unique_ptr<Bucket>* bucket, optional_yield y)
-{
-  ldpp_dout(dpp, 20) << "D4NFilterDriver::load_bucket" << dendl;
-  std::unique_ptr<Bucket> nb;
-  const int ret = next->load_bucket(dpp, b, &nb, y);
-  *bucket = std::make_unique<D4NFilterBucket>(std::move(nb), this);
-  return ret;
-}
-
 int D4NFilterBucket::create(const DoutPrefixProvider* dpp,
                             const CreateParams& params,
                             optional_yield y)
 {
   return next->create(dpp, params, y);
-}
-
-int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int max,
-		       ListResults& results, optional_yield y)
-{
-  ldpp_dout(dpp, 20) << "D4NFilterBucket::list" << dendl;
-  return next->list(dpp, params, max, results, y);
 }
 
 int D4NFilterObject::copy_object(User* user,
