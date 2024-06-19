@@ -176,6 +176,7 @@ int D4NFilterBucket::create(const DoutPrefixProvider* dpp,
 int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int max,
 		       ListResults& results, optional_yield y)
 {
+  ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "(): Listing bucket." << dendl;
   return next->list(dpp, params, max, results, y);
 }
 
