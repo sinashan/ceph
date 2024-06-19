@@ -177,7 +177,9 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
 		       ListResults& results, optional_yield y)
 {
   ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Bucket Name: " << next->get_name() << dendl;
-  return next->list(dpp, params, max, results, y);
+
+  //return next->list(dpp, params, max, results, y);
+  return "salam";
 }
 
 int D4NFilterObject::copy_object(User* user,
