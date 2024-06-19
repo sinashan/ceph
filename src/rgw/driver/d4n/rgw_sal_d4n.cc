@@ -173,6 +173,12 @@ int D4NFilterBucket::create(const DoutPrefixProvider* dpp,
   return next->create(dpp, params, y);
 }
 
+int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int max,
+		       ListResults& results, optional_yield y)
+{
+  return next->list(dpp, params, max, results, y);
+}
+
 int D4NFilterObject::copy_object(User* user,
                               req_info* info,
                               const rgw_zone_id& source_zone,
