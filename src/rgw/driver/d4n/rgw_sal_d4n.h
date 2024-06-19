@@ -79,7 +79,7 @@ class D4NFilterDriver : public FilterDriver {
     virtual void register_admin_apis(RGWRESTMgr* mgr) override;
     virtual std::unique_ptr<User> get_user(const rgw_user& u) override;
     virtual const std::string get_name() const override;
-
+    virtual int load_bucket(const DoutPrefixProvider* dpp, optional_yield y) override;
     virtual std::unique_ptr<Object> get_object(const rgw_obj_key& k) override;
 
     virtual std::unique_ptr<Writer> get_atomic_writer(const DoutPrefixProvider *dpp,
@@ -123,8 +123,6 @@ class D4NFilterBucket : public FilterBucket {
     virtual int create(const DoutPrefixProvider* dpp,
                        const CreateParams& params,
                        optional_yield y) override;
-    virtual int load_bucket(const DoutPrefixProvider* dpp, optional_yield y) override;
-    
 };
 
 class D4NFilterObject : public FilterObject {
