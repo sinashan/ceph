@@ -123,6 +123,8 @@ class D4NFilterBucket : public FilterBucket {
     virtual int create(const DoutPrefixProvider* dpp,
                        const CreateParams& params,
                        optional_yield y) override;
+    virtual int load_bucket(const DoutPrefixProvider* dpp, optional_yield y) override;
+    
 };
 
 class D4NFilterObject : public FilterObject {
