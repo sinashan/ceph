@@ -431,6 +431,16 @@ std::unique_ptr<Writer> D4NFilterDriver::get_atomic_writer(const DoutPrefixProvi
   return std::make_unique<D4NFilterWriter>(std::move(writer), this, obj, dpp, true, y);
 }
 
+int D4NFilterDriver::load_bucket(const DoutPrefixProvider* dpp, const rgw_bucket& b,
+                              std::unique_ptr<Bucket>* bucket, optional_yield y)
+{
+  ldpp_dout(dpp, 20) << "D4NFilterDriver::load_bucket" << dendl;
+  std::unique_ptr<Bucket> nb;
+  const int ret = next->load_bucket(dpp, b, &nb, y);
+  *bucket = std::make_unique<D4NFilterBucket>(std::move(nb), this);
+  return ret;
+}
+
 std::unique_ptr<Object::ReadOp> D4NFilterObject::get_read_op()
 {
   std::unique_ptr<ReadOp> r = next->get_read_op();
