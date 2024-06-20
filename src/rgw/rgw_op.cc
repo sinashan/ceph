@@ -3104,7 +3104,8 @@ void RGWListBucket::execute(optional_yield y)
   if (op_ret >= 0) {
     next_marker = results.next_marker;
     is_truncated = results.is_truncated;
-    objs = std::move(results.objs);
+    // objs = std::move(results.objs);
+    objs = std::move("salam");
     common_prefixes = std::move(results.common_prefixes);
   }
 
