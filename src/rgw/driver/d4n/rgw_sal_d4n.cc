@@ -177,11 +177,34 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
 		       ListResults& results, optional_yield y)
 {
   ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Bucket Name: " << next->get_name() << dendl;
-  ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Cache location: " << g_conf()->rgw_d4n_l1_datacache_persistent_path << dendl;
   int ret = next->list(dpp, params, max, results, y);
 
   if (ret >= 0) {
-    //results.objs.push_back("salam");
+    std::string bucket_nanme = next->get_name();
+    std::string cache_location = g_conf()->rgw_d4n_l1_datacache_persistent_path;
+
+    DIR* dir;
+    struct dirent* ent;
+    if ((dir = opendir(cache_location.c_str())) != NULL) {
+        // Read all the files and directories within the directory
+        while ((ent = readdir(dir)) != NULL) {
+            std::string file_name = ent->d_name;
+
+            // Check if the file name starts with the bucket name followed by an underscore
+            if (file_name.rfind(bucket_name + "_", 0) == 0) {
+                // This file matches the criteria, so add it to the results
+                // Replace Object with the actual type of the objects in your results.objs vector,
+                // and replace create_object_from_file with a function that creates an object from a file
+                //Object obj = create_object_from_file(cache_location + "/" + file_name);
+                //results.objs.push_back(obj);
+                ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Found object: " << file_name << dendl;
+            }
+        }
+        closedir(dir);
+    } else {
+        // Could not open directory
+        ldpp_dout(dpp, 0) << "Could not open directory " << cache_location << dendl;
+    }
   }
 
   return ret;
