@@ -195,7 +195,7 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
                 // This file matches the criteria, so add it to the results
                 // Replace Object with the actual type of the objects in your results.objs vector,
                 // and replace create_object_from_file with a function that creates an object from a file
-                
+                ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Found file: " << file_name << dendl;
             }
         }
         closedir(dir);
