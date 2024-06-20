@@ -2235,6 +2235,7 @@ static inline void rgw_cond_decode_objtags(
 
 void RGWGetObj::execute(optional_yield y)
 {
+  ldpp_dout(this, 20) << "RGWGetObj::" << __func__ << dendl;
   bufferlist bl;
   gc_invalidate_time = ceph_clock_now();
   gc_invalidate_time += (s->cct->_conf->rgw_gc_obj_min_wait / 2);
