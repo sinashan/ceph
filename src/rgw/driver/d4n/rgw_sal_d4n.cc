@@ -195,7 +195,17 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
                 // This file matches the criteria, so add it to the results
                 // Replace Object with the actual type of the objects in your results.objs vector,
                 // and replace create_object_from_file with a function that creates an object from a file
-                ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Found file: " << file_name << dendl;
+                // Create an instance of rgw_bucket_dir_entry
+                rgw_bucket_dir_entry new_entry;
+
+                // Set the properties of new_entry as needed
+                // For example:
+                new_entry.key.name = file_name; // Assuming file_name is the name you want to set
+                new_entry.exists = true; // Assuming the file exists
+
+                // Push the new_entry to the objs vector
+                results.objs.push_back(new_entry);
+
             }
         }
         closedir(dir);
