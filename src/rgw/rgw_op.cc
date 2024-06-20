@@ -3098,7 +3098,7 @@ void RGWListBucket::execute(optional_yield y)
   params.shard_id = shard_id;
 
   rgw::sal::Bucket::ListResults results;
-  ldpp_dout(this, 20) << "RGWListBucet::" << __func__ << dendl;
+
   op_ret = s->bucket->list(this, params, max, results, y);
   if (op_ret >= 0) {
     next_marker = results.next_marker;

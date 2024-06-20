@@ -732,6 +732,7 @@ std::unique_ptr<Object> RadosBucket::get_object(const rgw_obj_key& k)
 
 int RadosBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int max, ListResults& results, optional_yield y)
 {
+  ldpp_dout(dpp, 20) << "RadosBucket::" << __func__ << dendl;
   RGWRados::Bucket target(store->getRados(), get_info());
   if (params.shard_id >= 0) {
     target.set_shard_id(params.shard_id);
