@@ -181,7 +181,7 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
   int ret = next->list(dpp, params, max, results, y);
 
   if (ret >= 0) {
-    results.objs.push_back("salam");
+    //results.objs.push_back("salam");
   }
 
   return ret;
