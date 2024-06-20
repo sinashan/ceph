@@ -181,10 +181,7 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
   int ret = next->list(dpp, params, max, results, y);
 
   if (ret >= 0) {
-    ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "(): List operation succeeded." << dendl;
-  }
-  else {
-    ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "(): List operation failed." << dendl;
+    results.objs.push_back("salam");
   }
 
   return ret;
