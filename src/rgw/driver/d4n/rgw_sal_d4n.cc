@@ -552,6 +552,7 @@ int D4NFilterObject::D4NFilterReadOp::prepare(optional_yield y, const DoutPrefix
 //  ldpp_dout(dpp, 20) << "AMIN: D4NFilterObject:" << __func__ << dendl;
   int retDir;
   std::string localCache = g_conf()->rgw_local_cache_address;
+  ldpp_dout(dpp, 20) << "AMIN: D4NFilterObject:" << __func__ << ": localCache is: " << localCache << dendl;
   rgw::d4n::CacheObjectCpp object;
   object.objName = source->get_key().get_oid();
   object.bucketName = source->get_bucket()->get_name();
