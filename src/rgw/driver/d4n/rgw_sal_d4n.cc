@@ -182,7 +182,7 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
   if (ret >= 0) {
     std::string bucket_name = next->get_name();
     std::string cache_location = g_conf()->rgw_d4n_l1_datacache_persistent_path;
-
+    ldpp_do(dpp, 20) << "D4NFilterBucket::" << __func__ << " Size before: " << results.objs.size() << dendl;
     DIR* dir;
     struct dirent* ent;
     if ((dir = opendir(cache_location.c_str())) != NULL) {
@@ -205,6 +205,7 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
 
                 // Push the new_entry to the objs vector
                 results.objs.push_back(new_entry);
+                ldpp_do(dpp, 20) << "D4NFilterBucket::" << __func__ << " Size before: " << results.objs.size() << dendl;
 
             }
         }
