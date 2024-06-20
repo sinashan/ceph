@@ -186,32 +186,21 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
     DIR* dir;
     struct dirent* ent;
     if ((dir = opendir(cache_location.c_str())) != NULL) {
-        // Read all the files and directories within the directory
         while ((ent = readdir(dir)) != NULL) {
             std::string file_name = ent->d_name;
 
-            // Check if the file name starts with the bucket name followed by an underscore
             if (file_name.rfind(bucket_name + "_", 0) == 0) {
-                // This file matches the criteria, so add it to the results
-                // Replace Object with the actual type of the objects in your results.objs vector,
-                // and replace create_object_from_file with a function that creates an object from a file
-                // Create an instance of rgw_bucket_dir_entry
+
                 rgw_bucket_dir_entry new_entry;
 
-                // Set the properties of new_entry as needed
-                // For example:
-                new_entry.key.name = file_name; // Assuming file_name is the name you want to set
-                new_entry.exists = true; // Assuming the file exists
+                new_entry.key.name = file_name;
+                new_entry.exists = true; 
 
-                // Push the new_entry to the objs vector
                 results.objs.push_back(new_entry);
-                ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Size before: " << results.objs.size() << dendl;
-
             }
         }
         closedir(dir);
     } else {
-        // Could not open directory
         ldpp_dout(dpp, 0) << "Could not open directory " << cache_location << dendl;
     }
   }
