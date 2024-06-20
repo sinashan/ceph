@@ -178,7 +178,6 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
 {
   ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Bucket Name: " << next->get_name() << dendl;
   int ret = next->list(dpp, params, max, results, y);
-  rgw::d4n::CacheObjectCpp object;
 
   if (ret >= 0) {
     std::string bucket_name = next->get_name();
@@ -196,7 +195,7 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
                 // This file matches the criteria, so add it to the results
                 // Replace Object with the actual type of the objects in your results.objs vector,
                 // and replace create_object_from_file with a function that creates an object from a file
-                results.objs.push_back(object);
+                
             }
         }
         closedir(dir);
@@ -979,9 +978,6 @@ int D4NFilterObject::D4NFilterReadOp::findLocation(const DoutPrefixProvider* dpp
     return retDir;
   }
 }
-
-
-
 
 
 int D4NFilterObject::D4NFilterReadOp::iterate(const DoutPrefixProvider* dpp, int64_t ofs, int64_t end,
