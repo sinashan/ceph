@@ -180,7 +180,7 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
   int ret = next->list(dpp, params, max, results, y);
 
   if (ret >= 0) {
-    std::string bucket_nanme = next->get_name();
+    std::string bucket_name = next->get_name();
     std::string cache_location = g_conf()->rgw_d4n_l1_datacache_persistent_path;
 
     DIR* dir;
