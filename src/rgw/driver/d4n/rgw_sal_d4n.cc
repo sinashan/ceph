@@ -178,7 +178,12 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
 {
   ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Bucket Name: " << next->get_name() << dendl;
   int ret = next->list(dpp, params, max, results, y);
+  rgw::d4n::CacheObjectCpp object;
+  object.objName = source->get_key().get_oid();
+  object.bucketName = source->get_bucket()->get_name();
+  retDir = source->driver->get_obj_dir_cpp()->get(&object, y);
 
+  
   if (ret >= 0) {
     std::string bucket_name = next->get_name();
     std::string cache_location = g_conf()->rgw_d4n_l1_datacache_persistent_path;
@@ -552,7 +557,6 @@ int D4NFilterObject::D4NFilterReadOp::prepare(optional_yield y, const DoutPrefix
 //  ldpp_dout(dpp, 20) << "AMIN: D4NFilterObject:" << __func__ << dendl;
   int retDir;
   std::string localCache = g_conf()->rgw_local_cache_address;
-  ldpp_dout(dpp, 20) << "AMIN: D4NFilterObject:" << __func__ << ": localCache is: " << localCache << dendl;
   rgw::d4n::CacheObjectCpp object;
   object.objName = source->get_key().get_oid();
   object.bucketName = source->get_bucket()->get_name();
