@@ -173,6 +173,42 @@ int D4NFilterBucket::create(const DoutPrefixProvider* dpp,
   return next->create(dpp, params, y);
 }
 
+int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int max,
+		       ListResults& results, optional_yield y)
+{
+  ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Bucket Name: " << next->get_name() << dendl;
+  int ret = next->list(dpp, params, max, results, y);
+
+  if (ret >= 0) {
+    std::string bucket_name = next->get_name();
+    std::string cache_location = g_conf()->rgw_d4n_l1_datacache_persistent_path;
+
+    DIR* dir;
+    struct dirent* ent;
+    if ((dir = opendir(cache_location.c_str())) != NULL) {
+        // Read all the files and directories within the directory
+        while ((ent = readdir(dir)) != NULL) {
+            std::string file_name = ent->d_name;
+
+            // Check if the file name starts with the bucket name followed by an underscore
+            if (file_name.rfind(bucket_name + "_", 0) == 0) {
+                // This file matches the criteria, so add it to the results
+                // Replace Object with the actual type of the objects in your results.objs vector,
+                // and replace create_object_from_file with a function that creates an object from a file
+                Object obj = create_object_from_file(cache_location + "/" + file_name);
+                results.objs.push_back(obj);
+            }
+        }
+        closedir(dir);
+    } else {
+        // Could not open directory
+        ldpp_dout(dpp, 0) << "Could not open directory " << cache_location << dendl;
+    }
+  }
+
+  return ret;
+}
+
 int D4NFilterObject::copy_object(User* user,
                               req_info* info,
                               const rgw_zone_id& source_zone,
@@ -423,6 +459,16 @@ std::unique_ptr<Writer> D4NFilterDriver::get_atomic_writer(const DoutPrefixProvi
 							   olh_epoch, unique_tag);
 
   return std::make_unique<D4NFilterWriter>(std::move(writer), this, obj, dpp, true, y);
+}
+
+int D4NFilterDriver::load_bucket(const DoutPrefixProvider* dpp, const rgw_bucket& b,
+                              std::unique_ptr<Bucket>* bucket, optional_yield y)
+{
+  ldpp_dout(dpp, 20) << "D4NFilterDriver::" << __func__ <<  dendl;
+  std::unique_ptr<Bucket> nb;
+  const int ret = next->load_bucket(dpp, b, &nb, y);
+  *bucket = std::make_unique<D4NFilterBucket>(std::move(nb), this);
+  return ret;
 }
 
 std::unique_ptr<Object::ReadOp> D4NFilterObject::get_read_op()
