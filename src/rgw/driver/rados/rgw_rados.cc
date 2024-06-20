@@ -1879,6 +1879,7 @@ int RGWRados::Bucket::List::list_objects_ordered(
 
     for (auto eiter = ent_map.begin(); eiter != ent_map.end(); ++eiter) {
       rgw_bucket_dir_entry& entry = eiter->second;
+      ldpp_do_subdout(dpp, rgw, 20) << __func__ << "Sina: " << eiter->second << dendl;
       rgw_obj_index_key index_key = entry.key;
       rgw_obj_key obj(index_key);
 

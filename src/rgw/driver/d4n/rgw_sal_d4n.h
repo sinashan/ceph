@@ -54,8 +54,6 @@ public:
   }
 }; 
 
-
-
 class D4NFilterDriver : public FilterDriver {
   private:
     std::shared_ptr<connection> connOD;
