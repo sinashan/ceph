@@ -185,7 +185,7 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
     ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Size before: " << results.objs.size() << dendl;
     DIR* dir;
     struct dirent* ent;
-    ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Size: " << results.objs[0] << dendl;
+    ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Size: " << results.objs[0].meta.size << dendl;
     if ((dir = opendir(cache_location.c_str())) != NULL) {
         while ((ent = readdir(dir)) != NULL) {
             std::string file_name = ent->d_name;
