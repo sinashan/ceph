@@ -194,7 +194,10 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
                 rgw_bucket_dir_entry new_entry;
 
                 new_entry.key.name = file_name;
+                new_enrty.meta.size = 1;
                 new_entry.exists = true; 
+
+                D4NFilterObject filterObject();
 
                 results.objs.push_back(new_entry);
             }

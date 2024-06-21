@@ -2092,7 +2092,6 @@ RadosObject::RadosReadOp::RadosReadOp(RadosObject *_source, RGWObjectCtx *_octx)
 
 int RadosObject::RadosReadOp::prepare(optional_yield y, const DoutPrefixProvider* dpp)
 {
-  ldpp_dout(dpp, 20) << "RadosObject::RadosReadOp::" << __func__ << dendl;
   uint64_t obj_size;
 
   parent_op.conds.mod_ptr = params.mod_ptr;
@@ -2246,7 +2245,6 @@ int RadosObject::copy_object(User* user,
 
 int RadosObject::RadosReadOp::iterate(const DoutPrefixProvider* dpp, int64_t ofs, int64_t end, RGWGetDataCB* cb, optional_yield y)
 {
-  ldpp_dout(dpp, 20) << "RadosObject::RadosReadOp::" << __func__ << dendl;
   return parent_op.iterate(dpp, ofs, end, cb, y);
 }
 
