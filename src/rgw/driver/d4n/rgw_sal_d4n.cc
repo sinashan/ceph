@@ -183,9 +183,9 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
     std::string bucket_name = next->get_name();
     std::string cache_location = g_conf()->rgw_d4n_l1_datacache_persistent_path;
     ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Size before: " << results.objs.size() << dendl;
+    
     DIR* dir;
     struct dirent* ent;
-    ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Size: " << results.objs[0].meta.size << dendl;
     if ((dir = opendir(cache_location.c_str())) != NULL) {
         while ((ent = readdir(dir)) != NULL) {
             std::string file_name = ent->d_name;
@@ -197,8 +197,6 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
                 new_entry.key.name = file_name;
                 new_entry.meta.size = 1;
                 new_entry.exists = true; 
-
-                D4NFilterObject filterObject();
 
                 results.objs.push_back(new_entry);
             }
@@ -605,6 +603,7 @@ int D4NFilterObject::D4NFilterReadOp::prepare(optional_yield y, const DoutPrefix
       RGWObjState* astate;
       RGWQuotaInfo quota_info;
       std::unique_ptr<rgw::sal::User> user = source->driver->get_user(source->get_bucket()->get_owner());
+      ldpp_dout(dpp, 20) << "AMIN: D4NFilterObject::D4NFilterReadOp::" << __func__ << "(): " <<  __LINE__ << " source->get_key().get_oid() is: " << source->get_key().get_oid() << dendl;
       source->get_obj_state(dpp, &astate, y);
 
      for (auto& attr : attrs) {
