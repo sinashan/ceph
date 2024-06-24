@@ -215,7 +215,7 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
                     std::string read_length = parts[4];
                 }
 
-                auto r = client_cb->handle_data(bl, read_ofs, read_length-read_ofs)
+                auto r = client_cb->handle_data(bl, start_offset, read_length-start_offset)
 
                 // Get the file information
                 struct stat file_info;
