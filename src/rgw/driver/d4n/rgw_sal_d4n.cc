@@ -192,6 +192,11 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
             std::string file_name = ent->d_name;
 
             if (file_name.rfind(bucket_name + "_", 0) == 0) {
+                std::string bucket_name;
+                std::string object_version;
+                std::string object_name;
+                std::string start_offset;
+                std::string read_length;
 
                 rgw_bucket_dir_entry new_entry;
 
