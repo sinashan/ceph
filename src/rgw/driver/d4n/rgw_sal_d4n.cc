@@ -210,8 +210,8 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
                 std::string bucket_name = parts[0];
                 std::string object_version = parts[1];
                 std::string object_name = parts[2];
-                std::string start_offset = parts[3];
-                std::string read_length = parts[4];
+                std::string start_offset = atoi(parts[3]);
+                std::string read_length = atoi(parts[4]);
           
                 bufferlist bl;
                 auto r = client_cb->handle_data(bl, start_offset, read_length-start_offset);
