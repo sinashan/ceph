@@ -35,6 +35,8 @@
 #include <boost/asio/detached.hpp>
 #include <boost/redis/connection.hpp>
 
+#include <sys/stat.h>
+
 namespace rgw::d4n {
   class PolicyDriver;
   class D4NGetObjectCB;

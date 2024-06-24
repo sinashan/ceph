@@ -183,7 +183,7 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
     std::string bucket_name = next->get_name();
     std::string cache_location = g_conf()->rgw_d4n_l1_datacache_persistent_path;
     ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Size before: " << results.objs.size() << dendl;
-    
+
     DIR* dir;
     struct dirent* ent;
     if ((dir = opendir(cache_location.c_str())) != NULL) {
@@ -195,8 +195,21 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
                 rgw_bucket_dir_entry new_entry;
 
                 new_entry.key.name = file_name;
-                new_entry.meta.size = 1;
                 new_entry.exists = true; 
+
+                std::string full_path = cache_location + "/" + file_name;
+
+                // Get the file information
+                struct stat file_info;
+                if (stat(full_path.c_str(), &file_info) == 0) {
+                  new_entry.meta.accounted_size = file_info.st_size;
+
+                  // Convert the modification time to a time_point
+                  auto mtime = std::chrono::system_clock::from_time_t(file_info.st_mtime);
+
+                  // Set the mtime
+                  new_entry.meta.mtime = ceph::real_clock::from_time_t(std::chrono::system_clock::to_time_t(mtime));
+                }
 
                 results.objs.push_back(new_entry);
             }
