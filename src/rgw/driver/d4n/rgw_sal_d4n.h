@@ -119,7 +119,9 @@ class D4NFilterBucket : public FilterBucket {
       FilterBucket(std::move(_next)),
       filter(_filter) {}
     virtual ~D4NFilterBucket() = default;
-   
+
+    RGWGetDataCB* client_cb;   
+
     virtual std::unique_ptr<Object> get_object(const rgw_obj_key& key) override;
     virtual int create(const DoutPrefixProvider* dpp,
                        const CreateParams& params,

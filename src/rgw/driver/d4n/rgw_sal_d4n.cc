@@ -179,6 +179,7 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
   ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Bucket Name: " << next->get_name() << dendl;  
   int ret = next->list(dpp, params, max, results, y);
 
+
   if (ret >= 0) {
     std::string bucket_name = next->get_name();
     std::string cache_location = g_conf()->rgw_d4n_l1_datacache_persistent_path;
@@ -198,6 +199,23 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
                 new_entry.exists = true; 
 
                 std::string full_path = cache_location + "/" + file_name;
+
+                std::vector<std::string> parts;
+                std::stringstream ss(file_name);
+                std::string part;
+                while (std::getline(ss, part, '_')) {
+                    parts.push_back(part);
+                }
+
+                if (parts.size() >= 5) {
+                    std::string bucket_name = parts[0];
+                    std::string object_version = parts[1];
+                    std::string object_name = parts[2];
+                    std::string start_offset = parts[3];
+                    std::string read_length = parts[4];
+                }
+
+                auto r = client_cb->handle_data(bl, read_ofs, read_length-read_ofs)
 
                 // Get the file information
                 struct stat file_info;
