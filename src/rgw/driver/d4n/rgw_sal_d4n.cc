@@ -213,7 +213,7 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
                 std::string start_offset = parts[3];
                 std::string read_length = parts[4];
           
-
+                bufferlist bl;
                 auto r = client_cb->handle_data(bl, start_offset, read_length-start_offset);
 
                 // Get the file information
