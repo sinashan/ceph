@@ -212,14 +212,6 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
                     parts.push_back(part);
                 }
 
-                if (parts.size() >= 5) {
-                    std::string bucket_name = parts[0];
-                    std::string object_version = parts[1];
-                    std::string object_name = parts[2];
-                    std::string start_offset = parts[3];
-                    std::string read_length = parts[4];
-                }
-
                 auto r = client_cb->handle_data(bl, start_offset, read_length-start_offset)
 
                 // Get the file information
