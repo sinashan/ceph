@@ -176,16 +176,14 @@ int D4NFilterBucket::create(const DoutPrefixProvider* dpp,
 int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int max,
 		       ListResults& results, optional_yield y)
 {
-  ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Bucket Name: " << next->get_name() << dendl;
-  auto completed = filter->get_cache_driver();
-  
+  ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Bucket Name: " << next->get_name() << dendl;  
   int ret = next->list(dpp, params, max, results, y);
 
   if (ret >= 0) {
     std::string bucket_name = next->get_name();
     std::string cache_location = g_conf()->rgw_d4n_l1_datacache_persistent_path;
     ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Size before: " << results.objs.size() << dendl;
-    
+    results.objs[0].meta.size = 6;
     DIR* dir;
     struct dirent* ent;
     if ((dir = opendir(cache_location.c_str())) != NULL) {
