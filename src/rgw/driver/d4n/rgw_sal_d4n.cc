@@ -183,7 +183,7 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
     std::string bucket_name = next->get_name();
     std::string cache_location = g_conf()->rgw_d4n_l1_datacache_persistent_path;
     ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Size before: " << results.objs.size() << dendl;
-    results.objs[0].meta.size = 6;
+    ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Size: " << results.objs[0].meta.size << dendl;
     DIR* dir;
     struct dirent* ent;
     if ((dir = opendir(cache_location.c_str())) != NULL) {
