@@ -217,18 +217,18 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
                 auto r = client_cb->handle_data(bl, start_offset, read_length-start_offset)
 
                 // Get the file information
-                struct stat file_info;
-                if (stat(full_path.c_str(), &file_info) == 0) {
-                  new_entry.meta.accounted_size = file_info.st_size;
+                // struct stat file_info;
+                // if (stat(full_path.c_str(), &file_info) == 0) {
+                //   new_entry.meta.accounted_size = file_info.st_size;
 
-                  // Convert the modification time to a time_point
-                  auto mtime = std::chrono::system_clock::from_time_t(file_info.st_mtime);
+                //   // Convert the modification time to a time_point
+                //   auto mtime = std::chrono::system_clock::from_time_t(file_info.st_mtime);
 
-                  // Set the mtime
-                  new_entry.meta.mtime = ceph::real_clock::from_time_t(std::chrono::system_clock::to_time_t(mtime));
-                }
+                //   // Set the mtime
+                //   new_entry.meta.mtime = ceph::real_clock::from_time_t(std::chrono::system_clock::to_time_t(mtime));
+                // }
 
-                results.objs.push_back(new_entry);
+                //results.objs.push_back(new_entry);
             }
         }
         closedir(dir);
