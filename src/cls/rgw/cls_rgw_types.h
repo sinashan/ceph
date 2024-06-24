@@ -209,7 +209,7 @@ struct rgw_bucket_dir_entry_meta {
   bool appendable;
 
   rgw_bucket_dir_entry_meta() :
-    category(RGWObjCategory::None), size(0), accounted_size(0), appendable(false) { }
+    category(RGWObjCategory::None), size(10), accounted_size(0), appendable(false) { }
 
   void encode(ceph::buffer::list &bl) const {
     ENCODE_START(7, 3, bl);
