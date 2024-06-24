@@ -177,7 +177,7 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
 		       ListResults& results, optional_yield y)
 {
   ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Bucket Name: " << next->get_name() << dendl;
-  auto completed = source->driver->get_cache_driver();
+  auto completed = filter->get_cache_driver();
   
   int ret = next->list(dpp, params, max, results, y);
 
