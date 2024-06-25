@@ -178,9 +178,7 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
 {
   ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Bucket Name: " << next->get_name() << dendl;  
   int ret = next->list(dpp, params, max, results, y);
-  const uint64_t window_size = g_conf()->rgw_get_obj_window_size;
-  std::unique_ptr<rgw::Aio> aio;
-  aio = rgw::make_throttle(window_size, y);
+  
   if (ret >= 0) {
     std::string bucket_name = next->get_name();
     std::string cache_location = g_conf()->rgw_d4n_l1_datacache_persistent_path;
@@ -193,6 +191,12 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
             std::string file_name = ent->d_name;
 
             if (file_name.rfind(bucket_name + "_", 0) == 0) {
+                const uint64_t window_size = g_conf()->rgw_get_obj_window_size;
+                std::unique_ptr<rgw::Aio> aio;
+                aio = rgw::make_throttle(window_size, y);
+                
+                this->client_cb = cb;
+                this->cb->set_client_cb(cb, dpp, &y);
 
                 rgw_bucket_dir_entry new_entry;
 
