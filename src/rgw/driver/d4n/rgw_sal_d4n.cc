@@ -191,54 +191,51 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
             std::string file_name = ent->d_name;
 
             if (file_name.rfind(bucket_name + "_", 0) == 0) {
-                const uint64_t window_size = g_conf()->rgw_get_obj_window_size;
-                std::unique_ptr<rgw::Aio> aio;
-                aio = rgw::make_throttle(window_size, y);
-                
-                this->client_cb = cb;
-                this->cb->set_client_cb(cb, dpp, &y);
+              std::string full_path = cache_location + "/" + file_name;
 
-                rgw_bucket_dir_entry new_entry;
+              std::vector<std::string> parts;
+              std::stringstream ss(file_name);
+              std::string part;
+              while (std::getline(ss, part, '_')) {
+                  parts.push_back(part);
+              }
 
-                new_entry.key.name = file_name;
-                new_entry.exists = true; 
+              std::string bucket_name = parts[0];
+              std::string object_version = parts[1];
+              std::string object_name = parts[2];
+              int start_offset = atoi(parts[3].c_str());
+              int read_length = atoi(parts[4].c_str());
 
-                std::string full_path = cache_location + "/" + file_name;
+              const uint64_t window_size = g_conf()->rgw_get_obj_window_size;
+            
 
-                std::vector<std::string> parts;
-                std::stringstream ss(file_name);
-                std::string part;
-                while (std::getline(ss, part, '_')) {
-                    parts.push_back(part);
-                }
+              // rgw_bucket_dir_entry new_entry;
 
-                std::string bucket_name = parts[0];
-                std::string object_version = parts[1];
-                std::string object_name = parts[2];
-                int start_offset = atoi(parts[3].c_str());
-                int read_length = atoi(parts[4].c_str());
-          
-                ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Line: " << __LINE__ << dendl;
-                auto completed = filter->get_cache_driver()->get_async(dpp, y, aio.get(), file_name, start_offset, read_length, read_length, 0);
-                int ret = flush(dpp, std::move(completed), y);
-                // ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Ret: " << ret << dendl;
-                // ceph::bufferlist bl;
-                // auto r = client_cb->handle_data(bl, start_offset, read_length-start_offset);
-                // ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Line: " << __LINE__ << dendl;
+              // new_entry.key.name = file_name;
+              // new_entry.exists = true; 
 
-                // Get the file information
-                // struct stat file_info;
-                // if (stat(full_path.c_str(), &file_info) == 0) {
-                //   new_entry.meta.accounted_size = file_info.st_size;
+        
+              // ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Line: " << __LINE__ << dendl;
+              // auto completed = filter->get_cache_driver()->get_async(dpp, y, aio.get(), file_name, start_offset, read_length, read_length, 0);
+              // int ret = flush(dpp, std::move(completed), y);
+              ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Ret: " << ret << dendl;
+              ceph::bufferlist bl;
+              auto r = client_cb->handle_data(bl, start_offset, read_length-start_offset);
+              // ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Line: " << __LINE__ << dendl;
 
-                //   // Convert the modification time to a time_point
-                //   auto mtime = std::chrono::system_clock::from_time_t(file_info.st_mtime);
+              // Get the file information
+              // struct stat file_info;
+              // if (stat(full_path.c_str(), &file_info) == 0) {
+              //   new_entry.meta.accounted_size = file_info.st_size;
 
-                //   // Set the mtime
-                //   new_entry.meta.mtime = ceph::real_clock::from_time_t(std::chrono::system_clock::to_time_t(mtime));
-                // }
+              //   // Convert the modification time to a time_point
+              //   auto mtime = std::chrono::system_clock::from_time_t(file_info.st_mtime);
 
-                //results.objs.push_back(new_entry);
+              //   // Set the mtime
+              //   new_entry.meta.mtime = ceph::real_clock::from_time_t(std::chrono::system_clock::to_time_t(mtime));
+              // }
+
+              //results.objs.push_back(new_entry);
             }
         }
         closedir(dir);
