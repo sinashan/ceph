@@ -216,13 +216,8 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
           
                 ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Line: " << __LINE__ << dendl;
                 auto completed = filter->get_cache_driver()->get_async(dpp, y, aio.get(), file_name, start_offset, read_length, read_length, 0);
-                ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Line: " << __LINE__ << dendl;
-                std::list<bufferlist> bl_list;
-                while (!completed.empty() && completed.front().id == 0) {
-                  auto bl = std::move(completed.front().data);
-                  bl_list.push_back(bl);
-                  completed.pop_front_and_dispose(std::default_delete<rgw::AioResultEntry>{});
-                }
+                int ret = flush(dpp, std::move(completed), y);
+                ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Ret: " << ret << dendl;
                 // ceph::bufferlist bl;
                 // auto r = client_cb->handle_data(bl, start_offset, read_length-start_offset);
                 // ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Line: " << __LINE__ << dendl;
@@ -249,6 +244,24 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
   }
 
   return ret;
+}
+
+int D4NFilterBucket::flush(const DoutPrefixProvider* dpp, rgw::AioResultList&& results, optional_yield y)
+{
+  std::list<bufferlist> bl_list;
+
+  auto cmp = [](const auto& lhs, const auto& rhs) { return lhs.id < rhs.id; };
+  results.sort(cmp); // merge() requires results to be sorted first
+  completed.merge(results, cmp); // merge results in sorted order
+  while (!completed.empty() && completed.front().id == 0) {
+    auto bl = std::move(completed.front().data);
+
+    bl_list.push_back(bl);
+    
+    completed.pop_front_and_dispose(std::default_delete<rgw::AioResultEntry>{});
+
+  }
+
 }
 
 int D4NFilterObject::copy_object(User* user,

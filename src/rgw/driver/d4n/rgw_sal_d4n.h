@@ -128,6 +128,9 @@ class D4NFilterBucket : public FilterBucket {
                        optional_yield y) override;
     virtual int list(const DoutPrefixProvider* dpp, ListParams&, int,
 		   ListResults&, optional_yield y) override;
+
+    int flush(const DoutPrefixProvider* dpp, rgw::AioResultList&& results, optional_yield y);
+	  int drain(const DoutPrefixProvider* dpp, optional_yield y);
 };
 
 class D4NFilterObject : public FilterObject {
