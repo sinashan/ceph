@@ -179,6 +179,7 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
   ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Bucket Name: " << next->get_name() << dendl;  
   int ret = next->list(dpp, params, max, results, y);
   const uint64_t window_size = g_conf()->rgw_get_obj_window_size;
+  std::unique_ptr<rgw::Aio> aio;
   aio = rgw::make_throttle(window_size, y);
   if (ret >= 0) {
     std::string bucket_name = next->get_name();
@@ -213,12 +214,12 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
                 int start_offset = atoi(parts[3].c_str());
                 int read_length = atoi(parts[4].c_str());
           
-                ldpp_do(dpp, 20) << "D4NFilterBucket::" << __func__ << " Line: " << __LINE__ << dendl;
-                auto completed = source->driver->get_cache_driver()->get_async(dpp, y, aio.get(), object_name, start_offset, read_length, 0, 0);
-                ldpp_do(dpp, 20) << "D4NFilterBucket::" << __func__ << " Line: " << __LINE__ << dendl;
+                ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Line: " << __LINE__ << dendl;
+                auto completed = filter->get_cache_driver()->get_async(dpp, y, aio.get(), object_name, start_offset, read_length, 0, 0);
+                ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Line: " << __LINE__ << dendl;
                 ceph::bufferlist bl;
                 auto r = client_cb->handle_data(bl, start_offset, read_length-start_offset);
-                ldpp_do(dpp, 20) << "D4NFilterBucket::" << __func__ << " Line: " << __LINE__ << dendl;
+                ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Line: " << __LINE__ << dendl;
 
                 // Get the file information
                 // struct stat file_info;
