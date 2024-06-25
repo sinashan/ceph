@@ -252,9 +252,13 @@ int D4NFilterBucket::flush(const DoutPrefixProvider* dpp, rgw::AioResultList&& r
 
   auto cmp = [](const auto& lhs, const auto& rhs) { return lhs.id < rhs.id; };
   results.sort(cmp); // merge() requires results to be sorted first
+  ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "Line: " << __LINE__ << dendl;
   completed.merge(results, cmp); // merge results in sorted order
+  ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "Line: " << __LINE__ << dendl;
   while (!completed.empty() && completed.front().id == 0) {
+    ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "Line: " << __LINE__ << dendl;
     auto bl = std::move(completed.front().data);
+    ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "Line: " << __LINE__ << dendl;
 
     bl_list.push_back(bl);
     
