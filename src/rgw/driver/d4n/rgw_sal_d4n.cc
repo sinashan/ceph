@@ -217,7 +217,7 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
                 ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Line: " << __LINE__ << dendl;
                 auto completed = filter->get_cache_driver()->get_async(dpp, y, aio.get(), file_name, start_offset, read_length, read_length, 0);
                 int ret = flush(dpp, std::move(completed), y);
-                ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Ret: " << ret << dendl;
+                // ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Ret: " << ret << dendl;
                 // ceph::bufferlist bl;
                 // auto r = client_cb->handle_data(bl, start_offset, read_length-start_offset);
                 // ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Line: " << __LINE__ << dendl;
@@ -248,14 +248,22 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
 
 int D4NFilterBucket::flush(const DoutPrefixProvider* dpp, rgw::AioResultList&& results, optional_yield y)
 {
+
+  int r = rgw::check_for_errors(results);
+
+  if (r < 0) {
+    return r;
+  }
+
   std::list<bufferlist> bl_list;
 
   auto cmp = [](const auto& lhs, const auto& rhs) { return lhs.id < rhs.id; };
   results.sort(cmp); // merge() requires results to be sorted first
   ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "Line: " << __LINE__ << dendl;
   completed.merge(results, cmp); // merge results in sorted order
+
   ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "Line: " << __LINE__ << dendl;
-  // while (!completed.empty() && completed.front().id == 0) {
+  while (!completed.empty() && completed.front().id == 0) {
     ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "Line: " << __LINE__ << dendl;
     auto bl = std::move(completed.front().data);
     ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "Line: " << __LINE__ << dendl;
@@ -264,7 +272,7 @@ int D4NFilterBucket::flush(const DoutPrefixProvider* dpp, rgw::AioResultList&& r
     
     completed.pop_front_and_dispose(std::default_delete<rgw::AioResultEntry>{});
 
-  // }
+  }
 
 }
 
@@ -788,7 +796,6 @@ int D4NFilterObject::D4NFilterReadOp::flush(const DoutPrefixProvider* dpp, rgw::
 
     if (this->first_block == true){
       ldpp_dout(dpp, 20) << "AMIN:DEBUG" << __func__ << "(): " <<  __LINE__ << " before handle_data" << dendl;
-      ldpp_dout(dpp, 20) << "AMIN:DEBUG" << __func__ << "(): " <<  __LINE__ << " length: " << bl.length() << dendl;
       int r = client_cb->handle_data(bl, read_ofs, bl.length()-read_ofs);
       ldpp_dout(dpp, 20) << "AMIN:DEBUG" << __func__ << "(): " <<  __LINE__ << " after handle_data" << dendl;
       set_first_block(false);
