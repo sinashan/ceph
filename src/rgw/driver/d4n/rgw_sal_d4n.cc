@@ -788,6 +788,7 @@ int D4NFilterObject::D4NFilterReadOp::flush(const DoutPrefixProvider* dpp, rgw::
 
     if (this->first_block == true){
       ldpp_dout(dpp, 20) << "AMIN:DEBUG" << __func__ << "(): " <<  __LINE__ << " before handle_data" << dendl;
+      ldpp_dout(dpp, 20) << "AMIN:DEBUG" << __func__ << "(): " <<  __LINE__ << " length: " << bl.length() << dendl;
       int r = client_cb->handle_data(bl, read_ofs, bl.length()-read_ofs);
       ldpp_dout(dpp, 20) << "AMIN:DEBUG" << __func__ << "(): " <<  __LINE__ << " after handle_data" << dendl;
       set_first_block(false);
