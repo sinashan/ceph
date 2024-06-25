@@ -214,9 +214,9 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
                 int start_offset = atoi(parts[3].c_str());
                 int read_length = atoi(parts[4].c_str());
           
-                // ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Line: " << __LINE__ << dendl;
-                // auto completed = filter->get_cache_driver()->get_async(dpp, y, aio.get(), object_name, start_offset, read_length, 0, 0);
-                // ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Line: " << __LINE__ << dendl;
+                ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Line: " << __LINE__ << dendl;
+                auto completed = filter->get_cache_driver()->get_async(dpp, y, aio.get(), file_name, start_offset, read_length, 0, 0);
+                ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Line: " << __LINE__ << dendl;
                 // ceph::bufferlist bl;
                 // auto r = client_cb->handle_data(bl, start_offset, read_length-start_offset);
                 // ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Line: " << __LINE__ << dendl;
@@ -1115,11 +1115,6 @@ int D4NFilterObject::D4NFilterReadOp::iterate(const DoutPrefixProvider* dpp, int
 
     if (cached_local == 1){ //local cache
       ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " <<  __LINE__ << " Local Cache" <<  dendl;
-      ldpp_dout(dpp, 20) << "D4NFilterObject::iterate:: " << __func__ << "Key: " << key \ 
-                                                                      << "Read Offset: " << read_ofs \
-                                                                      << "Length: " << len_to_read \
-                                                                      << "Cost: " << cost \
-                                                                      << "ID: " << id << dendl;
       auto completed = source->driver->get_cache_driver()->get_async(dpp, y, aio.get(), key, read_ofs, len_to_read, cost, id);
       ret = flush(dpp, std::move(completed), y);
       if (ret < 0) {
