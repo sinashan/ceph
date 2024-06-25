@@ -121,7 +121,8 @@ class D4NFilterBucket : public FilterBucket {
     virtual ~D4NFilterBucket() = default;
 
     RGWGetDataCB* client_cb;   
-
+    rgw::AioResultList completed;
+    
     virtual std::unique_ptr<Object> get_object(const rgw_obj_key& key) override;
     virtual int create(const DoutPrefixProvider* dpp,
                        const CreateParams& params,
