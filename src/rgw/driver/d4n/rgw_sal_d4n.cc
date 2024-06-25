@@ -218,7 +218,7 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
                 auto completed = filter->get_cache_driver()->get_async(dpp, y, aio.get(), file_name, start_offset, read_length, read_length, 0);
                 ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Line: " << __LINE__ << dendl;
                 std::list<bufferlist> bl_list;
-                while (!completed.empty() && completed.front().id == offset) {
+                while (!completed.empty() && completed.front().id == 0) {
                   auto bl = std::move(completed.front().data);
                   bl_list.push_back(bl);
                   completed.pop_front_and_dispose(std::default_delete<rgw::AioResultEntry>{});
