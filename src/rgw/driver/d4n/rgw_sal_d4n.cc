@@ -222,15 +222,6 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
                   auto bl = std::move(completed.front().data);
                   bl_list.push_back(bl);
                   completed.pop_front_and_dispose(std::default_delete<rgw::AioResultEntry>{});
-                  auto c = aio->wait();
-                  while (!c.empty()) {
-                    int r = flush(dpp, std::move(c), y);
-                    if (r < 0) {
-                      cancel();
-                      return r;
-                    }
-                    c = aio->wait();
-                  }
                 }
                 // ceph::bufferlist bl;
                 // auto r = client_cb->handle_data(bl, start_offset, read_length-start_offset);
