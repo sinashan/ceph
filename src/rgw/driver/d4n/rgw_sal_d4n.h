@@ -121,7 +121,6 @@ class D4NFilterBucket : public FilterBucket {
     virtual ~D4NFilterBucket() = default;
 
     RGWGetDataCB* client_cb;   
-    std::unique_ptr<D4NFilterGetCB> cb;
     std::unique_ptr<rgw::Aio> aio;
     rgw::AioResultList completed;
     
