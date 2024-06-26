@@ -219,8 +219,8 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
               // auto completed = filter->get_cache_driver()->get_async(dpp, y, aio.get(), file_name, start_offset, read_length, read_length, 0);
               // int ret = flush(dpp, std::move(completed), y);
               ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Ret: " << ret << dendl;
-              ceph::bufferlist bl;
-              auto r = client_cb->handle_data(bl, start_offset, read_length-start_offset);
+              bufferlist bl;
+              auto r = cb->handle_data(bl, start_offset, read_length-start_offset);
               // ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Line: " << __LINE__ << dendl;
 
               // Get the file information
