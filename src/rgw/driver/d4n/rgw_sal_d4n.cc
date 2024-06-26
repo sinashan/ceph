@@ -214,12 +214,18 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
               // new_entry.key.name = file_name;
               // new_entry.exists = true; 
 
-        
-              ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Line: " << __LINE__ << dendl;
-              auto completed = filter->get_cache_driver()->get_async(dpp, y, aio.get(), file_name, start_offset, read_length, read_length, 0);
-              ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "Line: " << __LINE__ << " id is: " << completed.front().id << dendl;
-              ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "Line: " << __LINE__ << " empty is: " << completed.empty() << dendl;
-              int ret = flush(dpp, std::move(completed), y);
+              rgw::sal::Attrs attrs;
+
+              if (filter>get_cache_driver()->get_attrs(dpp, file_name, attrs, y) < 0) {
+                ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "(): CacheDriver get_attrs method failed." << dendl;
+              } else {
+                ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "(): CacheDriver get_attrs method didn't fail." << dendl;
+              }
+              // ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Line: " << __LINE__ << dendl;
+              // auto completed = filter->get_cache_driver()->get_async(dpp, y, aio.get(), file_name, start_offset, read_length, read_length, 0);
+              // ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "Line: " << __LINE__ << " id is: " << completed.front().id << dendl;
+              // ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "Line: " << __LINE__ << " empty is: " << completed.empty() << dendl;
+              // int ret = flush(dpp, std::move(completed), y);
               // ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Ret: " << ret << dendl;
               // bufferlist bl;
               // auto r = client_cb->handle_data(bl, start_offset, read_length-start_offset);
