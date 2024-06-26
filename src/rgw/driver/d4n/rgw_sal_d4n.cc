@@ -216,7 +216,7 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
 
               rgw::sal::Attrs attrs;
 
-              if (filter>get_cache_driver()->get_attrs(dpp, file_name, attrs, y) < 0) {
+              if (filter->get_cache_driver()->get_attrs(dpp, file_name, attrs, y) < 0) {
                 ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "(): CacheDriver get_attrs method failed." << dendl;
               } else {
                 ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "(): CacheDriver get_attrs method didn't fail." << dendl;
