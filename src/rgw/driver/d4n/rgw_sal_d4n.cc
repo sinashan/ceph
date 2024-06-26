@@ -221,7 +221,7 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
               } else {
                 ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "(): CacheDriver get_attrs method didn't fail." << dendl;
                 for (auto& attr : attrs) {
-                  ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "(): Attr: " << attr.first << " Value: " << attr.second << dendl;
+                  ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "(): Attr: " << attr.first << " Value: " << attr.second.c_str() << dendl;
                 }
               }
               // ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Line: " << __LINE__ << dendl;
