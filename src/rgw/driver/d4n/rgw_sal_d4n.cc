@@ -207,7 +207,7 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
               int read_length = atoi(parts[4].c_str());
 
               const uint64_t window_size = g_conf()->rgw_get_obj_window_size;
-            
+              aio = rgw::make_throttle(window_size, y);
 
               // rgw_bucket_dir_entry new_entry;
 
