@@ -123,6 +123,7 @@ class D4NFilterBucket : public FilterBucket {
     RGWGetDataCB* client_cb;   
     std::unique_ptr<rgw::Aio> aio;
     rgw::AioResultList completed;
+    D4NFilterObject* source;
     
     virtual std::unique_ptr<Object> get_object(const rgw_obj_key& key) override;
     virtual int create(const DoutPrefixProvider* dpp,
