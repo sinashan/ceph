@@ -3070,7 +3070,7 @@ void RGWListBucket::pre_exec()
 
 void RGWListBucket::execute(optional_yield y)
 {
-  ldpp_do_cout(this, 20) << "RGWListBucket::" << __func__ << dendl;
+  ldpp_dout(this, 20) << "RGWListBucket::" << __func__ << dendl;
   if (!s->bucket_exists) {
     op_ret = -ERR_NO_SUCH_BUCKET;
     return;
