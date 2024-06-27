@@ -207,6 +207,9 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
               int start_offset = atoi(parts[3].c_str());
               int read_length = atoi(parts[4].c_str());
 
+              // Add the read_length to the object size in the map
+              object_sizes[object_name] += read_length;
+
               rgw_bucket_dir_entry new_entry;
 
               new_entry.key.name = file_name;
