@@ -113,7 +113,7 @@ class D4NFilterUser : public FilterUser {
 class D4NFilterBucket : public FilterBucket {
   private:
     D4NFilterDriver* filter;
-    D4NFilterGetCB* remote_cb;
+    D4NFilterObject::D4NFilterReadOp::D4NFilterGetCB* remote_cb;
 
   public:
     D4NFilterBucket(std::unique_ptr<Bucket> _next, D4NFilterDriver* _filter) :
