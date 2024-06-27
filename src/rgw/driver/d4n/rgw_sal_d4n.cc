@@ -226,7 +226,7 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
                 new_entry.meta.mtime = ceph::real_clock::from_time_t(std::chrono::system_clock::to_time_t(mtime));
               }
 
-              results.objs.push_back(new_entry);
+              //results.objs.push_back(new_entry);
             }
         }
         closedir(dir);
