@@ -181,6 +181,7 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
   
   if (ret >= 0) {
     std::string bucket_name = next->get_name();
+    std::string cache_location = g_conf()->rgw_d4n_l1_datacache_persistent_path;
 
     DIR* dir;
     struct dirent* ent;
@@ -203,7 +204,6 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
               std::string object_name = parts[2];
               int start_offset = atoi(parts[3].c_str());
               int read_length = atoi(parts[4].c_str());
-
 
               rgw_bucket_dir_entry new_entry;
 
