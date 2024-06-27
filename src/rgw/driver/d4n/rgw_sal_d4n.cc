@@ -206,12 +206,14 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
               int start_offset = atoi(parts[3].c_str());
               int read_length = atoi(parts[4].c_str());
 
+              // combine 4MB cached blocks into single object size
               object_sizes[object_name] += read_length;
 
             }
         }
         closedir(dir);
 
+        // merge cached with backend objects
         for (const auto& pair : object_sizes) {
           const std::string& object_name = pair.first;
           uint64_t object_size = pair.second;
@@ -231,7 +233,6 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
               new_entry.exists = true;
               new_entry.meta.accounted_size = object_size;
 
-              // Set the mtime to the current time
               auto mtime = std::chrono::system_clock::now();
               new_entry.meta.mtime = ceph::real_clock::from_time_t(std::chrono::system_clock::to_time_t(mtime));
 
