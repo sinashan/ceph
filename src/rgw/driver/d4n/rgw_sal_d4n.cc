@@ -233,13 +233,13 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
     } else {
         ldpp_dout(dpp, 0) << "Could not open directory " << cache_location << dendl;
     }
-  }
-  for (auto& pair : object_sizes) {
-    std::string object_name = pair.first;
-    uint64_t object_size = pair.second;
-    // Now you can use object_name and object_size
-    ldpp_dout(dpp, 20) << "Object Name: " << object_name \
-                        << "Object Size: " << object_size << dendl;
+    for (auto& pair : object_sizes) {
+      std::string object_name = pair.first;
+      uint64_t object_size = pair.second;
+      // Now you can use object_name and object_size
+      ldpp_dout(dpp, 20) << "Object Name: " << object_name \
+                          << "Object Size: " << object_size << dendl;
+    }
   }
   return ret;
 }
