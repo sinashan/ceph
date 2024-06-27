@@ -263,8 +263,8 @@ class D4NFilterObject : public FilterObject {
 class D4NFilterBucket : public FilterBucket {
   private:
     D4NFilterDriver* filter;
-    D4NFilterObject* obj;
-    
+    D4NFilterObject* source;
+
   public:
     D4NFilterBucket(std::unique_ptr<Bucket> _next, D4NFilterDriver* _filter) :
       FilterBucket(std::move(_next)),
