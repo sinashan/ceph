@@ -263,7 +263,7 @@ class D4NFilterObject : public FilterObject {
 class D4NFilterBucket : public FilterBucket {
   private:
     D4NFilterDriver* filter;
-    D4NFilterObject* source;
+    D4NFilterObject::D4NFilterReadOp::D4NFilterGetCB::RGWGetDataCB* client_cb;
 
   public:
     D4NFilterBucket(std::unique_ptr<Bucket> _next, D4NFilterDriver* _filter) :
