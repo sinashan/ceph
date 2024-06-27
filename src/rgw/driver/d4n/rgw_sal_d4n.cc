@@ -181,8 +181,6 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
   
   if (ret >= 0) {
     std::string bucket_name = next->get_name();
-    std::string cache_location = g_conf()->rgw_d4n_l1_datacache_persistent_path;
-    ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Size before: " << results.objs.size() << dendl;
 
     DIR* dir;
     struct dirent* ent;
@@ -206,37 +204,25 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
               int start_offset = atoi(parts[3].c_str());
               int read_length = atoi(parts[4].c_str());
 
-              const uint64_t window_size = g_conf()->rgw_get_obj_window_size;
-              aio = rgw::make_throttle(window_size, y);
 
-              ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Line: " << __LINE__ << dendl;
-              // auto completed = filter->get_cache_driver()->get_async(dpp, y, aio.get(), file_name, start_offset, read_length, read_length, 0);
-              // ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "Line: " << __LINE__ << " id is: " << completed.front().id << dendl;
-              // ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "Line: " << __LINE__ << " empty is: " << completed.empty() << dendl;
-              // int ret = flush(dpp, std::move(completed), y);
-              // ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Ret: " << ret << dendl;
-              //  bufferlist bl;
-              //  auto r = client_cb->handle_data(bl, start_offset, read_length-start_offset);
-              // ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Line: " << __LINE__ << dendl;
+              rgw_bucket_dir_entry new_entry;
 
-              // rgw_bucket_dir_entry new_entry;
+              new_entry.key.name = file_name;
+              new_entry.exists = true; 
 
-              // new_entry.key.name = file_name;
-              // new_entry.exists = true; 
+              Get the file information
+              struct stat file_info;
+              if (stat(full_path.c_str(), &file_info) == 0) {
+                new_entry.meta.accounted_size = file_info.st_size;
 
-              // Get the file information
-              // struct stat file_info;
-              // if (stat(full_path.c_str(), &file_info) == 0) {
-              //   new_entry.meta.accounted_size = file_info.st_size;
+                // Convert the modification time to a time_point
+                auto mtime = std::chrono::system_clock::from_time_t(file_info.st_mtime);
 
-              //   // Convert the modification time to a time_point
-              //   auto mtime = std::chrono::system_clock::from_time_t(file_info.st_mtime);
+                // Set the mtime
+                new_entry.meta.mtime = ceph::real_clock::from_time_t(std::chrono::system_clock::to_time_t(mtime));
+              }
 
-              //   // Set the mtime
-              //   new_entry.meta.mtime = ceph::real_clock::from_time_t(std::chrono::system_clock::to_time_t(mtime));
-              // }
-
-              //results.objs.push_back(new_entry);
+              results.objs.push_back(new_entry);
             }
         }
         closedir(dir);
@@ -246,38 +232,6 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
   }
 
   return ret;
-}
-
-
-int D4NFilterBucket::flush(const DoutPrefixProvider* dpp, rgw::AioResultList&& results, optional_yield y)
-{
-
-  int r = rgw::check_for_errors(results);
-
-  if (r < 0) {
-    return r;
-  }
-
-  std::list<bufferlist> bl_list;
-
-  auto cmp = [](const auto& lhs, const auto& rhs) { return lhs.id < rhs.id; };
-  results.sort(cmp); // merge() requires results to be sorted first
-  ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "Line: " << __LINE__ << dendl;
-  completed.merge(results, cmp); // merge results in sorted order
-
-  ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "Line: " << __LINE__ << " id is: " << completed.front().id << dendl;
-  ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "Line: " << __LINE__ << " empty is: " << completed.empty() << dendl;
-  while (!completed.empty()) {
-    ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "Line: " << __LINE__ << dendl;
-    auto bl = std::move(completed.front().data);
-    ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "Line: " << __LINE__ << dendl;
-
-    bl_list.push_back(bl);
-    
-    completed.pop_front_and_dispose(std::default_delete<rgw::AioResultEntry>{});
-
-  }
-
 }
 
 int D4NFilterObject::copy_object(User* user,
