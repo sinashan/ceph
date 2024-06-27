@@ -206,26 +206,8 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
               int start_offset = atoi(parts[3].c_str());
               int read_length = atoi(parts[4].c_str());
 
-              // Add the read_length to the object size in the map
               object_sizes[object_name] += read_length;
 
-              rgw_bucket_dir_entry new_entry;
-
-              new_entry.key.name = file_name;
-              new_entry.exists = true; 
-
-              struct stat file_info;
-              if (stat(full_path.c_str(), &file_info) == 0) {
-                new_entry.meta.accounted_size = file_info.st_size;
-
-                // Convert the modification time to a time_point
-                auto mtime = std::chrono::system_clock::from_time_t(file_info.st_mtime);
-
-                // Set the mtime
-                new_entry.meta.mtime = ceph::real_clock::from_time_t(std::chrono::system_clock::to_time_t(mtime));
-              }
-
-              //results.objs.push_back(new_entry);
             }
         }
         closedir(dir);
@@ -234,7 +216,6 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
           const std::string& object_name = pair.first;
           uint64_t object_size = pair.second;
 
-          // Check if the object is already in results
           bool found = false;
           for (const auto& entry : results.objs) {
               if (entry.key.name == object_name) {
@@ -243,7 +224,6 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
               }
           }
 
-          // If the object is not in results, add it
           if (!found) {
               rgw_bucket_dir_entry new_entry;
 
