@@ -101,6 +101,7 @@ int RadosUser::list_buckets(const DoutPrefixProvider* dpp, const std::string& ma
 			       const std::string& end_marker, uint64_t max, bool need_stats,
 			       BucketList &result, optional_yield y)
 {
+  ldpp_dout(dpp, 20) << "RadosUser::" << __func__ << dendl;
   RGWUserBuckets ulist;
   bool is_truncated = false;
 
@@ -732,6 +733,7 @@ std::unique_ptr<Object> RadosBucket::get_object(const rgw_obj_key& k)
 
 int RadosBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int max, ListResults& results, optional_yield y)
 {
+  ldpp_dout(dpp, 20) << "RadosBucket::" << __func__ << dendl;
   RGWRados::Bucket target(store->getRados(), get_info());
   if (params.shard_id >= 0) {
     target.set_shard_id(params.shard_id);
