@@ -182,33 +182,32 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
   if (ret >= 0) {
     std::string bucket_name = next->get_name();
     std::string cache_location = g_conf()->rgw_d4n_l1_datacache_persistent_path;
-    //std::unordered_map<std::string, uint64_t> object_sizes;
+    std::unordered_map<std::string, uint64_t> object_sizes;
 
     DIR* dir;
     struct dirent* ent;
     if ((dir = opendir(cache_location.c_str())) != NULL) {
         while ((ent = readdir(dir)) != NULL) {
             std::string file_name = ent->d_name;
-            
-            std::vector<std::string> parts;
-            std::string part;
-            std::stringstream ss(file_name);
-            while (std::getline(ss, part, '_')) {
-                parts.push_back(part);
-            }
-  
-            std::string bucket_name = parts[0];
-            std::string object_version = parts[1];
-            std::string object_name = parts[2];
-            int start_offset = atoi(parts[3].c_str());
-            int read_length = atoi(parts[4].c_str());
 
             if (file_name.rfind(bucket_name + "_", 0) == 0) {
               std::string full_path = cache_location + "/" + file_name;
 
+              std::vector<std::string> parts;
+              std::string part;
+              std::stringstream ss(file_name);
+              while (std::getline(ss, part, '_')) {
+                  parts.push_back(part);
+              }
+    
+              std::string bucket_name = parts[0];
+              std::string object_version = parts[1];
+              std::string object_name = parts[2];
+              int start_offset = atoi(parts[3].c_str());
+              int read_length = atoi(parts[4].c_str());
 
               // Add the read_length to the object size in the map
-              //object_sizes[object_name] += read_length;
+              object_sizes[object_name] += read_length;
 
               rgw_bucket_dir_entry new_entry;
 
@@ -230,9 +229,9 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
             }
         }
         closedir(dir);
-    } else {
-        ldpp_dout(dpp, 0) << "Could not open directory " << cache_location << dendl;
-    }
+  } else {
+      ldpp_dout(dpp, 0) << "Could not open directory " << cache_location << dendl;
+  }
     // for (auto& pair : object_sizes) {
     //   std::string object_name = pair.first;
     //   uint64_t object_size = pair.second;
