@@ -304,6 +304,7 @@ rgw::Aio::OpFunc SSDDriver::ssd_cache_write_op(const DoutPrefixProvider *dpp, op
 
 rgw::AioResultList SSDDriver::get_async(const DoutPrefixProvider* dpp, optional_yield y, rgw::Aio* aio, const std::string& key, off_t ofs, uint64_t len, uint64_t cost, uint64_t id)
 {
+    ldpp_dout(dpp, 20) << "Kiiiiir" << dendl;
     rgw_raw_obj r_obj;
     r_obj.oid = key;
     return aio->get(r_obj, ssd_cache_read_op(dpp, y, this, ofs, len, key), cost, id);
