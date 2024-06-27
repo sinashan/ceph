@@ -210,7 +210,6 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
               new_entry.key.name = file_name;
               new_entry.exists = true; 
 
-              Get the file information
               struct stat file_info;
               if (stat(full_path.c_str(), &file_info) == 0) {
                 new_entry.meta.accounted_size = file_info.st_size;
