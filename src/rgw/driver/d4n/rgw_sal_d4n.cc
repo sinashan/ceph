@@ -229,12 +229,34 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
             }
         }
         closedir(dir);
-        for (auto& pair : object_sizes) {
-          std::string object_name = pair.first;
+
+        for (const auto& pair : object_sizes) {
+          const std::string& object_name = pair.first;
           uint64_t object_size = pair.second;
-          // Now you can use object_name and object_size
-          ldpp_dout(dpp, 20) << "Object Name: " << object_name \
-                              << "Object Size: " << object_size << dendl;
+
+          // Check if the object is already in results
+          bool found = false;
+          for (const auto& entry : results.objs) {
+              if (entry.key.name == object_name) {
+                  found = true;
+                  break;
+              }
+          }
+
+          // If the object is not in results, add it
+          if (!found) {
+              rgw_bucket_dir_entry new_entry;
+
+              new_entry.key.name = object_name;
+              new_entry.exists = true;
+              new_entry.meta.accounted_size = object_size;
+
+              // Set the mtime to the current time
+              auto mtime = std::chrono::system_clock::now();
+              new_entry.meta.mtime = ceph::real_clock::from_time_t(std::chrono::system_clock::to_time_t(mtime));
+
+              results.objs.push_back(new_entry);
+          }
         }
   } else {
       ldpp_dout(dpp, 0) << "Could not open directory " << cache_location << dendl;
