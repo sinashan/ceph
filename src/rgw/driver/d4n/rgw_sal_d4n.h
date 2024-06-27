@@ -113,6 +113,7 @@ class D4NFilterUser : public FilterUser {
 class D4NFilterBucket : public FilterBucket {
   private:
     D4NFilterDriver* filter;
+    D4NFilterGetCB* remote_cb;
 
   public:
     D4NFilterBucket(std::unique_ptr<Bucket> _next, D4NFilterDriver* _filter) :
@@ -120,7 +121,6 @@ class D4NFilterBucket : public FilterBucket {
       filter(_filter) {}
     virtual ~D4NFilterBucket() = default;
 
-    RGWGetDataCB* client_cb;   
     std::unique_ptr<rgw::Aio> aio;
     rgw::AioResultList completed;
 
