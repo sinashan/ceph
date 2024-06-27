@@ -199,7 +199,7 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
               while (std::getline(ss, part, '_')) {
                   parts.push_back(part);
               }
-
+    
               std::string bucket_name = parts[0];
               std::string object_version = parts[1];
               std::string object_name = parts[2];
@@ -209,30 +209,21 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
               const uint64_t window_size = g_conf()->rgw_get_obj_window_size;
               aio = rgw::make_throttle(window_size, y);
 
-              // rgw_bucket_dir_entry new_entry;
-
-              // new_entry.key.name = file_name;
-              // new_entry.exists = true; 
-
-              rgw::sal::Attrs attrs;
-
-              if (filter->get_cache_driver()->get_attrs(dpp, file_name, attrs, y) < 0) {
-                ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "(): CacheDriver get_attrs method failed." << dendl;
-              } else {
-                ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "(): CacheDriver get_attrs method didn't fail." << dendl;
-                for (auto& attr : attrs) {
-                  ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "(): Attr: " << attr.first << " Value: " << attr.second << dendl;
-                }
-              }
-              // ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Line: " << __LINE__ << dendl;
-              // auto completed = filter->get_cache_driver()->get_async(dpp, y, aio.get(), file_name, start_offset, read_length, read_length, 0);
+              ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Line: " << __LINE__ << dendl;
+              //auto completed = filter->get_cache_driver()->get_async(dpp, y, aio.get(), file_name, start_offset, read_length, read_length, 0);
+              filter->get_cache_driver()->get_name();
               // ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "Line: " << __LINE__ << " id is: " << completed.front().id << dendl;
               // ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "Line: " << __LINE__ << " empty is: " << completed.empty() << dendl;
               // int ret = flush(dpp, std::move(completed), y);
               // ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Ret: " << ret << dendl;
-              bufferlist bl;
-              auto r = client_cb->handle_data(bl, start_offset, read_length-start_offset);
+              // bufferlist bl;
+              // auto r = client_cb->handle_data(bl, start_offset, read_length-start_offset);
               // ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Line: " << __LINE__ << dendl;
+
+              // rgw_bucket_dir_entry new_entry;
+
+              // new_entry.key.name = file_name;
+              // new_entry.exists = true; 
 
               // Get the file information
               // struct stat file_info;
@@ -258,28 +249,6 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
   return ret;
 }
 
-int D4NFilterBucket::handle_data(bufferlist& bl, off_t bl_ofs, off_t bl_len)
-{
-  auto rgw_get_obj_max_req_size = g_conf()->rgw_get_obj_max_req_size;
-  ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "Line: " << __LINE__ << dendl;
-  if (!last_part && bl.length() <= rgw_get_obj_max_req_size) {
-    if (first_block == true){
-      auto r = client_cb->handle_data(bl, bl_ofs+read_ofs, bl_len-read_ofs);
-      this->set_first_block(false);
-      if (r < 0) {
-        return r;
-      }
-    }
-    else{
-      auto r = client_cb->handle_data(bl, bl_ofs, bl_len);
-      if (r < 0) {
-        return r;
-      }
-    }
-      
-  }
-  return 0;
-}
 
 int D4NFilterBucket::flush(const DoutPrefixProvider* dpp, rgw::AioResultList&& results, optional_yield y)
 {
@@ -1181,7 +1150,7 @@ int D4NFilterObject::D4NFilterReadOp::iterate(const DoutPrefixProvider* dpp, int
     ceph::bufferlist bl;
 
     if (cached_local == 1){ //local cache
-      ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " <<  __LINE__ << " Local Cache, Key" << key <<  dendl;
+      ldpp_dout(dpp, 20) << "AMIN: " << __func__ << "(): " <<  __LINE__ << " Local Cache" <<  dendl;
       auto completed = source->driver->get_cache_driver()->get_async(dpp, y, aio.get(), key, read_ofs, len_to_read, cost, id);
       ret = flush(dpp, std::move(completed), y);
       if (ret < 0) {

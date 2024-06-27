@@ -110,7 +110,29 @@ class D4NFilterUser : public FilterUser {
     virtual ~D4NFilterUser() = default;
 };
 
+class D4NFilterBucket : public FilterBucket {
+  private:
+    D4NFilterDriver* filter;
 
+  public:
+    D4NFilterBucket(std::unique_ptr<Bucket> _next, D4NFilterDriver* _filter) :
+      FilterBucket(std::move(_next)),
+      filter(_filter) {}
+    virtual ~D4NFilterBucket() = default;
+
+    std::unique_ptr<rgw::Aio> aio;
+    rgw::AioResultList completed;
+
+    virtual std::unique_ptr<Object> get_object(const rgw_obj_key& key) override;
+    virtual int create(const DoutPrefixProvider* dpp,
+                       const CreateParams& params,
+                       optional_yield y) override;
+    virtual int list(const DoutPrefixProvider* dpp, ListParams&, int,
+		   ListResults&, optional_yield y) override;
+
+    int flush(const DoutPrefixProvider* dpp, rgw::AioResultList&& results, optional_yield y);
+	  int drain(const DoutPrefixProvider* dpp, optional_yield y);
+};
 
 class D4NFilterObject : public FilterObject {
   private:
@@ -260,33 +282,6 @@ class D4NFilterObject : public FilterObject {
 
     void set_object_attrs(Attrs attrs) { this->attrs_d4n = attrs; }
     Attrs get_object_attrs() { return this->attrs_d4n; }
-};
-
-class D4NFilterBucket : public FilterBucket {
-  private:
-    D4NFilterDriver* filter;
-    D4NFilterObject::D4NFilterReadOp::D4NFilterGetCB* remote_cb;
-
-  public:
-    D4NFilterBucket(std::unique_ptr<Bucket> _next, D4NFilterDriver* _filter) :
-      FilterBucket(std::move(_next)),
-      filter(_filter) {}
-    virtual ~D4NFilterBucket() = default;
-
-    std::unique_ptr<rgw::Aio> aio;
-    rgw::AioResultList completed;
-
-    virtual std::unique_ptr<Object> get_object(const rgw_obj_key& key) override;
-    virtual int create(const DoutPrefixProvider* dpp,
-                       const CreateParams& params,
-                       optional_yield y) override;
-    virtual int list(const DoutPrefixProvider* dpp, ListParams&, int,
-		   ListResults&, optional_yield y) override;
-
-    int flush(const DoutPrefixProvider* dpp, rgw::AioResultList&& results, optional_yield y);
-	  int drain(const DoutPrefixProvider* dpp, optional_yield y);
-
-    int handle_data(bufferlist& bl, off_t bl_ofs, off_t bl_len);
 };
 
 class D4NFilterWriter : public FilterWriter {
