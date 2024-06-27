@@ -230,8 +230,8 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
               // ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "Line: " << __LINE__ << " empty is: " << completed.empty() << dendl;
               // int ret = flush(dpp, std::move(completed), y);
               // ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Ret: " << ret << dendl;
-              // bufferlist bl;
-              // auto r = client_cb->handle_data(bl, start_offset, read_length-start_offset);
+              bufferlist bl;
+              auto r = client_cb->handle_data(bl, start_offset, read_length-start_offset);
               // ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Line: " << __LINE__ << dendl;
 
               // Get the file information
@@ -256,6 +256,29 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
   }
 
   return ret;
+}
+
+int D4NFilterBucket::handle_data(bufferlist& bl, off_t bl_ofs, off_t bl_len)
+{
+  auto rgw_get_obj_max_req_size = g_conf()->rgw_get_obj_max_req_size;
+  ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << "Line: " << __LINE__ << dendl;
+  if (!last_part && bl.length() <= rgw_get_obj_max_req_size) {
+    if (first_block == true){
+      auto r = client_cb->handle_data(bl, bl_ofs+read_ofs, bl_len-read_ofs);
+      this->set_first_block(false);
+      if (r < 0) {
+        return r;
+      }
+    }
+    else{
+      auto r = client_cb->handle_data(bl, bl_ofs, bl_len);
+      if (r < 0) {
+        return r;
+      }
+    }
+      
+  }
+  return 0;
 }
 
 int D4NFilterBucket::flush(const DoutPrefixProvider* dpp, rgw::AioResultList&& results, optional_yield y)
