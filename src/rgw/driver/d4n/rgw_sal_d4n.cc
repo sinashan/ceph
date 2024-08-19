@@ -177,72 +177,73 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
 		       ListResults& results, optional_yield y)
 {
   ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Bucket Name: " << next->get_name() << dendl;  
-  int ret = next->list(dpp, params, max, results, y);
+  redis_exec("keys *");
+  // int ret = next->list(dpp, params, max, results, y);
   
-  if (ret >= 0) {
-    std::string bucket_name = next->get_name();
-    std::string cache_location = g_conf()->rgw_d4n_l1_datacache_persistent_path;
-    std::unordered_map<std::string, uint64_t> object_sizes;
+  // if (ret >= 0) {
+  //   std::string bucket_name = next->get_name();
+  //   std::string cache_location = g_conf()->rgw_d4n_l1_datacache_persistent_path;
+  //   std::unordered_map<std::string, uint64_t> object_sizes;
 
-    DIR* dir;
-    struct dirent* ent;
-    if ((dir = opendir(cache_location.c_str())) != NULL) {
-        while ((ent = readdir(dir)) != NULL) {
-            std::string file_name = ent->d_name;
+  //   DIR* dir;
+  //   struct dirent* ent;
+  //   if ((dir = opendir(cache_location.c_str())) != NULL) {
+  //       while ((ent = readdir(dir)) != NULL) {
+  //           std::string file_name = ent->d_name;
 
-            if (file_name.rfind(bucket_name + "_", 0) == 0) {
-              std::string full_path = cache_location + "/" + file_name;
+  //           if (file_name.rfind(bucket_name + "_", 0) == 0) {
+  //             std::string full_path = cache_location + "/" + file_name;
 
-              std::vector<std::string> parts;
-              std::string part;
-              std::stringstream ss(file_name);
-              while (std::getline(ss, part, '_')) {
-                  parts.push_back(part);
-              }
+  //             std::vector<std::string> parts;
+  //             std::string part;
+  //             std::stringstream ss(file_name);
+  //             while (std::getline(ss, part, '_')) {
+  //                 parts.push_back(part);
+  //             }
     
-              std::string bucket_name = parts[0];
-              std::string object_version = parts[1];
-              std::string object_name = parts[2];
-              int start_offset = atoi(parts[3].c_str());
-              int read_length = atoi(parts[4].c_str());
+  //             std::string bucket_name = parts[0];
+  //             std::string object_version = parts[1];
+  //             std::string object_name = parts[2];
+  //             int start_offset = atoi(parts[3].c_str());
+  //             int read_length = atoi(parts[4].c_str());
 
-              // combine 4MB cached blocks into single object size
-              object_sizes[object_name] += read_length;
+  //             // combine 4MB cached blocks into single object size
+  //             object_sizes[object_name] += read_length;
 
-            }
-        }
-        closedir(dir);
+  //           }
+  //       }
+  //       closedir(dir);
 
-        // merge cached with backend objects
-        for (const auto& pair : object_sizes) {
-          const std::string& object_name = pair.first;
-          uint64_t object_size = pair.second;
+  //       // merge cached with backend objects
+  //       for (const auto& pair : object_sizes) {
+  //         const std::string& object_name = pair.first;
+  //         uint64_t object_size = pair.second;
 
-          bool found = false;
-          for (const auto& entry : results.objs) {
-              if (entry.key.name == object_name) {
-                  found = true;
-                  break;
-              }
-          }
+  //         bool found = false;
+  //         for (const auto& entry : results.objs) {
+  //             if (entry.key.name == object_name) {
+  //                 found = true;
+  //                 break;
+  //             }
+  //         }
 
-          if (!found) {
-              rgw_bucket_dir_entry new_entry;
+  //         if (!found) {
+  //             rgw_bucket_dir_entry new_entry;
 
-              new_entry.key.name = object_name;
-              new_entry.exists = true;
-              new_entry.meta.accounted_size = object_size;
+  //             new_entry.key.name = object_name;
+  //             new_entry.exists = true;
+  //             new_entry.meta.accounted_size = object_size;
 
-              auto mtime = std::chrono::system_clock::now();
-              new_entry.meta.mtime = ceph::real_clock::from_time_t(std::chrono::system_clock::to_time_t(mtime));
+  //             auto mtime = std::chrono::system_clock::now();
+  //             new_entry.meta.mtime = ceph::real_clock::from_time_t(std::chrono::system_clock::to_time_t(mtime));
 
-              results.objs.push_back(new_entry);
-          }
-        }
-  } else {
-      ldpp_dout(dpp, 0) << "Could not open directory " << cache_location << dendl;
-  }
-  }
+  //             results.objs.push_back(new_entry);
+  //         }
+  //       }
+  // } else {
+  //     ldpp_dout(dpp, 0) << "Could not open directory " << cache_location << dendl;
+  // }
+  // }
   return ret;
 }
 
