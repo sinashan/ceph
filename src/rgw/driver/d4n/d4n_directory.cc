@@ -95,6 +95,27 @@ int ObjectDirectory::exist_key(CacheObj* object, optional_yield y)
   return std::get<0>(resp).value();
 }
 
+int ObjectDirectory::bucket_keys(optional_yield y) 
+{
+  ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
+  response<int> resp;
+
+  try {
+    boost::system::error_code ec;
+    request req;
+    req.push("KEYS", "*");
+
+  ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
+    redis_exec(conn, ec, req, resp, y);
+  ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
+
+    if ((bool)ec)
+      return false;
+  } catch (std::exception &e) {}
+
+  return 1;
+}
+
 /*
 void ObjectDirectory::shutdown()
 {
