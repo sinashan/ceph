@@ -83,7 +83,7 @@ class ObjectDirectory: public Directory {
     */
 
     int exist_key(CacheObj* object, optional_yield y);
-    int bucket_keys(const DoutPrefixProvider* dpp, optional_yield y);
+    int bucket_keys(const DoutPrefixProvider* dpp,optional_yield y);
     //void shutdown();
 
     int set(CacheObj* object, optional_yield y);
