@@ -244,7 +244,7 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
   //     ldpp_dout(dpp, 0) << "Could not open directory " << cache_location << dendl;
   // }
   // }
-  return ret;
+  //return ret;
 }
 
 int D4NFilterObject::copy_object(User* user,
