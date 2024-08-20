@@ -98,6 +98,7 @@ int ObjectDirectory::exist_key(CacheObj* object, optional_yield y)
 int ObjectDirectory::bucket_keys(const DoutPrefixProvider* dpp, std::vector<std::string>* objects, optional_yield y) 
 {
   ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
+  response< std::vector<std::string> > resp;
 
   try {
     boost::system::error_code ec;
@@ -105,13 +106,18 @@ int ObjectDirectory::bucket_keys(const DoutPrefixProvider* dpp, std::vector<std:
     req.push("KEYS", "*");
 
     ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
-    redis_exec(conn, ec, req, objects, y);
+    redis_exec(conn, ec, req, resp, y);
+    ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): Response " << std::get<0>(resp).value()[0] << dendl;
+    const auto& keys = std::get<0>(resp).value();
+    for (const auto& key : keys) {
+        objects->push_back(key); // Push each key into objects
+      }
 
     if ((bool)ec)
       return false;
   } catch (std::exception &e) {}
 
-  return 1;
+  return 0;
 }
 
 /*
