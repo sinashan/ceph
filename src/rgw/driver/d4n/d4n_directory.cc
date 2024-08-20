@@ -98,7 +98,7 @@ int ObjectDirectory::exist_key(CacheObj* object, optional_yield y)
 int ObjectDirectory::bucket_keys(const DoutPrefixProvider* dpp, optional_yield y) 
 {
   ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
-  response<int> resp;
+  response< std::vector<std::string> > resp;
 
   try {
     boost::system::error_code ec;
