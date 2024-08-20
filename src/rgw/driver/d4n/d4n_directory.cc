@@ -107,7 +107,7 @@ int ObjectDirectory::bucket_keys(const DoutPrefixProvider* dpp, optional_yield y
 
     ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
     redis_exec(conn, ec, req, resp, y);
-    ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): Response" << resp << dendl;
+    //ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): Response " << resp << dendl;
 
     if ((bool)ec)
       return false;
