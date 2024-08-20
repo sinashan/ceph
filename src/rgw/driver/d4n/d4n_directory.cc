@@ -103,7 +103,7 @@ int ObjectDirectory::bucket_keys(const DoutPrefixProvider* dpp, optional_yield y
   try {
     boost::system::error_code ec;
     request req;
-    req.push("KEYS", "*");
+    //req.push("KEYS", "*");
 
   ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
     //redis_exec(conn, ec, req, resp, y);
