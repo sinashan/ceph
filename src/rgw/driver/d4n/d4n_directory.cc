@@ -110,8 +110,15 @@ int ObjectDirectory::bucket_keys(const DoutPrefixProvider* dpp, std::string buck
     ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): Response " << std::get<0>(resp).value()[0] << dendl;
     const auto& keys = std::get<0>(resp).value();
     for (const auto& key : keys) {
-        objects->push_back(key); // Push each key into objects
+      // Count underscores in the key
+      size_t underscore_count = std::count(key.begin(), key.end(), '_');
+      if (underscore_count == 1) {
+        // Extract the bucket name from the key
+        std::string key_bucket_name = key.substr(0, key.find("_"));
+        if (key_bucket_name == bucket_name) {
+          objects->push_back(key); // Push the key into objects if it matches the bucket_name
       }
+    }
 
     if ((bool)ec)
       return false;
