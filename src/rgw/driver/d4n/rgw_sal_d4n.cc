@@ -177,8 +177,22 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
 		       ListResults& results, optional_yield y)
 {
   ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Bucket Name: " << next->get_name() << dendl;  
-  rgw::d4n::ObjectDirectory* obj_dir = filter->get_obj_dir();
-  obj_dir->bucket_keys(dpp, y);
+  //rgw::d4n::ObjectDirectory* obj_dir = filter->get_obj_dir();
+  //obj_dir->bucket_keys(dpp, y);
+  response<int> resp;
+
+  try {
+    boost::system::error_code ec;
+    request req;
+    req.push("KEYS", "*");
+
+    ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
+    redis_exec(conn, ec, req, resp, y);
+    ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
+
+    if ((bool)ec)
+      return false;
+  } catch (std::exception &e) {}
 
   int ret = next->list(dpp, params, max, results, y);
   
