@@ -179,9 +179,8 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
   ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Bucket Name: " << next->get_name() << dendl;  
   rgw::d4n::ObjectDirectory* obj_dir = filter->get_obj_dir();
   obj_dir->bucket_keys(dpp, y);
-  ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Bucket Name: " << next->get_name() << dendl;  
 
-  // int ret = next->list(dpp, params, max, results, y);
+  int ret = next->list(dpp, params, max, results, y);
   
   // if (ret >= 0) {
   //   std::string bucket_name = next->get_name();
@@ -247,7 +246,7 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
   //     ldpp_dout(dpp, 0) << "Could not open directory " << cache_location << dendl;
   // }
   // }
-  //return ret;
+  return ret;
 }
 
 int D4NFilterObject::copy_object(User* user,
