@@ -176,10 +176,11 @@ int D4NFilterBucket::create(const DoutPrefixProvider* dpp,
 int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int max,
 		       ListResults& results, optional_yield y)
 {
-  ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Bucket Name: " << next->get_name() << dendl;  
+  std::string bucket_name = next->get_name();
+  ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Bucket Name: " << bucket_name << dendl;  
   rgw::d4n::ObjectDirectory* obj_dir = filter->get_obj_dir();
   std::vector<std::string> dir_objs;
-  obj_dir->bucket_keys(dpp, &dir_objs, y);
+  obj_dir->bucket_keys(dpp, bucket_name, &dir_objs, y);
 
   for (const auto& obj : dir_objs) {
     ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Object Name: " << obj << dendl;
