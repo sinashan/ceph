@@ -95,7 +95,7 @@ int ObjectDirectory::exist_key(CacheObj* object, optional_yield y)
   return std::get<0>(resp).value();
 }
 
-int ObjectDirectory::bucket_keys(const DoutPrefixProvider* dpp, std::vector<std::string>* keys, optional_yield y) 
+int ObjectDirectory::bucket_keys(const DoutPrefixProvider* dpp, std::vector<std::string>* objects, optional_yield y) 
 {
   ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
 
@@ -105,7 +105,7 @@ int ObjectDirectory::bucket_keys(const DoutPrefixProvider* dpp, std::vector<std:
     req.push("KEYS", "*");
 
     ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
-    redis_exec(conn, ec, req, keys, y);
+    redis_exec(conn, ec, req, objects, y);
 
     if ((bool)ec)
       return false;
