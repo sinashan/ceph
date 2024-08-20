@@ -178,7 +178,7 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
 {
   ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Bucket Name: " << next->get_name() << dendl;  
   rgw::d4n::ObjectDirectory* obj_dir = filter->get_obj_dir();
-  std::vector<std:string> dir_objs;
+  std::vector<std::string> dir_objs;
   obj_dir->bucket_keys(dpp, &dir_objs, y);
 
   int ret = next->list(dpp, params, max, results, y);
