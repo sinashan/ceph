@@ -120,6 +120,7 @@ int ObjectDirectory::bucket_keys(const DoutPrefixProvider* dpp, std::string buck
           CacheObj* object;
           
           std::vector<std::string> fields;
+          ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
 
           fields.push_back("objName");
           fields.push_back("bucketName");
@@ -134,10 +135,13 @@ int ObjectDirectory::bucket_keys(const DoutPrefixProvider* dpp, std::string buck
           try {
             boost::system::error_code ec;
             request req;
+            ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
             req.push_range("HMGET", key, fields);
             response< std::vector<std::string> > resp;
 
+          ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
             redis_exec(conn, ec, req, resp, y);
+          ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
 
             if (std::get<0>(resp).value().empty()) {
         return -ENOENT;
