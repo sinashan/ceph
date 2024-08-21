@@ -144,33 +144,33 @@ int ObjectDirectory::bucket_keys(const DoutPrefixProvider* dpp, std::string buck
           ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
           ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): Value: " << std::get<0>(resp).value()[0] << dendl;
 
-        //     if (std::get<0>(resp).value().empty()) {
-        //   ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
-        // return -ENOENT;
-        //     } else if (ec) {
-        //   ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
-        // return -ec.value();
-        //     }
+            if (std::get<0>(resp).value().empty()) {
+          ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
+        return -ENOENT;
+            } else if (ec) {
+          ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
+        return -ec.value();
+            }
 
             object->objName = std::get<0>(resp).value()[0];
-            // object->bucketName = std::get<0>(resp).value()[1];
-            // object->creationTime = std::get<0>(resp).value()[2];
-            // object->dirty = boost::lexical_cast<bool>(std::get<0>(resp).value()[3]);
+            object->bucketName = std::get<0>(resp).value()[1];
+            object->creationTime = std::get<0>(resp).value()[2];
+            object->dirty = boost::lexical_cast<bool>(std::get<0>(resp).value()[3]);
 
-            // {
-              // std::stringstream ss(boost::lexical_cast<std::string>(std::get<0>(resp).value()[4]));
+            {
+              std::stringstream ss(boost::lexical_cast<std::string>(std::get<0>(resp).value()[4]));
 
-        // while (!ss.eof()) {
-        //         std::string host;
-        //   std::getline(ss, host, '_');
-        //   object->hostsList.push_back(host);
-        // }
-        //     }
+        while (!ss.eof()) {
+                std::string host;
+          std::getline(ss, host, '_');
+          object->hostsList.push_back(host);
+        }
+            }
 
-            // object->version = std::get<0>(resp).value()[5];
-            // object->size = boost::lexical_cast<uint64_t>(std::get<0>(resp).value()[6]);
-            // object->in_lsvd = boost::lexical_cast<bool>(std::get<0>(resp).value()[7]);
-            // object->attrs[RGW_ATTR_ACL] = buffer::list::static_from_string(std::get<0>(resp).value()[8]);
+            object->version = std::get<0>(resp).value()[5];
+            object->size = boost::lexical_cast<uint64_t>(std::get<0>(resp).value()[6]);
+            object->in_lsvd = boost::lexical_cast<bool>(std::get<0>(resp).value()[7]);
+            object->attrs[RGW_ATTR_ACL] = buffer::list::static_from_string(std::get<0>(resp).value()[8]);
 
           } catch (std::exception &e) {
           ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
