@@ -144,8 +144,10 @@ int ObjectDirectory::bucket_keys(const DoutPrefixProvider* dpp, std::string buck
           ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
 
             if (std::get<0>(resp).value().empty()) {
+          ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
         return -ENOENT;
             } else if (ec) {
+          ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
         return -ec.value();
             }
 
@@ -170,10 +172,11 @@ int ObjectDirectory::bucket_keys(const DoutPrefixProvider* dpp, std::string buck
             object->attrs[RGW_ATTR_ACL] = buffer::list::static_from_string(std::get<0>(resp).value()[8]);
 
           } catch (std::exception &e) {
+          ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
             return -EINVAL;
           }
 
-          //objects->push_back(object); // Push the key into objects if it matches the bucket_name
+          objects->push_back(object); // Push the key into objects if it matches the bucket_name
         }
       }
     }
