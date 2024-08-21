@@ -151,10 +151,10 @@ int ObjectDirectory::bucket_keys(const DoutPrefixProvider* dpp, std::string buck
         return -ec.value();
             }
 
-        //     object->objName = std::get<0>(resp).value()[0];
-        //     object->bucketName = std::get<0>(resp).value()[1];
-        //     object->creationTime = std::get<0>(resp).value()[2];
-        //     object->dirty = boost::lexical_cast<bool>(std::get<0>(resp).value()[3]);
+            object->objName = std::get<0>(resp).value()[0];
+            object->bucketName = std::get<0>(resp).value()[1];
+            object->creationTime = std::get<0>(resp).value()[2];
+            object->dirty = boost::lexical_cast<bool>(std::get<0>(resp).value()[3]);
 
         //     {
         //       std::stringstream ss(boost::lexical_cast<std::string>(std::get<0>(resp).value()[4]));
