@@ -173,7 +173,7 @@ int ObjectDirectory::bucket_keys(const DoutPrefixProvider* dpp, std::string buck
             return -EINVAL;
           }
 
-          objects->push_back(object); // Push the key into objects if it matches the bucket_name
+          //objects->push_back(object); // Push the key into objects if it matches the bucket_name
         }
       }
     }
