@@ -116,7 +116,8 @@ int ObjectDirectory::bucket_keys(const DoutPrefixProvider* dpp, std::string buck
         // Extract the bucket name from the key
         std::string key_bucket_name = key.substr(0, key.find("_"));
         if (key_bucket_name == bucket_name) {
-          objects->push_back(key); // Push the key into objects if it matches the bucket_name
+          std::string object_name = key.substr(key.find("_") + 1);
+          objects->push_back(object_name); // Push the key into objects if it matches the bucket_name
         }
       }
     }
