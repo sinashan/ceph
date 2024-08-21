@@ -200,7 +200,7 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
 
     //   results.objs.push_back(new_entry);
 
-    }
+    // }
   }
 
   return ret;
