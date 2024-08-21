@@ -153,24 +153,36 @@ int ObjectDirectory::bucket_keys(const DoutPrefixProvider* dpp, std::string buck
             }
 
             object->objName = std::get<0>(resp).value()[0];
+          ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
             object->bucketName = std::get<0>(resp).value()[1];
+          ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
             object->creationTime = std::get<0>(resp).value()[2];
+          ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
             object->dirty = boost::lexical_cast<bool>(std::get<0>(resp).value()[3]);
+          ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
 
             {
               std::stringstream ss(boost::lexical_cast<std::string>(std::get<0>(resp).value()[4]));
+          ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
 
         while (!ss.eof()) {
+          ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
                 std::string host;
           std::getline(ss, host, '_');
+          ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
           object->hostsList.push_back(host);
+          ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
         }
             }
 
             object->version = std::get<0>(resp).value()[5];
+          ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
             object->size = boost::lexical_cast<uint64_t>(std::get<0>(resp).value()[6]);
+          ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
             object->in_lsvd = boost::lexical_cast<bool>(std::get<0>(resp).value()[7]);
-            // object->attrs[RGW_ATTR_ACL] = buffer::list::static_from_string(std::get<0>(resp).value()[8]);
+          ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
+            object->attrs[RGW_ATTR_ACL] = buffer::list::static_from_string(std::get<0>(resp).value()[8]);
+          ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
 
           } catch (std::exception &e) {
           ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
