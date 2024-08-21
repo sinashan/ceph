@@ -117,7 +117,7 @@ int ObjectDirectory::bucket_keys(const DoutPrefixProvider* dpp, std::string buck
         std::string key_bucket_name = key.substr(0, key.find("_"));
         if (key_bucket_name == bucket_name) {
           //std::string object_name = key.substr(key.find("_") + 1);
-          CacheObj* object;
+          CacheObj object;
           
           std::vector<std::string> fields;
           ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
@@ -143,6 +143,7 @@ int ObjectDirectory::bucket_keys(const DoutPrefixProvider* dpp, std::string buck
             redis_exec(conn, ec, req, resp, y);
           ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
           ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): Value: " << std::get<0>(resp).value()[0] << dendl;
+          object.objName = std::get<0>(resp).value()[0];
 
         //     if (std::get<0>(resp).value().empty()) {
         //   ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
