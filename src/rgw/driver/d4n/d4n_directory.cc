@@ -157,7 +157,7 @@ int ObjectDirectory::bucket_keys(const DoutPrefixProvider* dpp, std::string buck
             object->creationTime = std::get<0>(resp).value()[2];
             object->dirty = boost::lexical_cast<bool>(std::get<0>(resp).value()[3]);
 
-            {
+            // {
               // std::stringstream ss(boost::lexical_cast<std::string>(std::get<0>(resp).value()[4]));
 
         // while (!ss.eof()) {
