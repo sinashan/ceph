@@ -183,7 +183,9 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
   obj_dir->bucket_keys(dpp, bucket_name, &dir_objs, y);
 
   for (const auto& obj : dir_objs) {
-    // ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Object Name: " << obj->objName << dendl;
+     ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Object Name: " << obj->objName << dendl;
+     ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Bucket Name: " << obj->bucketName << dendl;
+     ldpp_dout(dpp, 20) << "D4NFilterBucket::" << __func__ << " Object Size: " << obj->size << dendl;
   }
 
   int ret = next->list(dpp, params, max, results, y);
