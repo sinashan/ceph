@@ -198,7 +198,7 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
       new_entry.exists = true;
 
       std::tm tm = {};
-      std::istringstream ss(time_str);
+      std::istringstream ss(obj->creationTime);
       ss >> std::get_time(&tm, format.c_str());
       if (ss.fail()) {
           throw std::runtime_error("Failed to parse time string");
