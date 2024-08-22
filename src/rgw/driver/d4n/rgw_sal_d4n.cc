@@ -198,9 +198,15 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
       
       new_entry.exists = true;
 
-      new_entry.meta.mtime = ceph::real_clock::from_time_t(std::chrono::system_clock::to_time_t(obj->creationTime));
+      // Convert obj->creationTime from std::string to std::chrono::system_clock::time_point
+      std::tm tm = {};
+      std::istringstream ss(obj->creationTime);
+      ss >> std::get_time(&tm, "%Y-%m-%d %H:%M:%S");
+      auto tp = std::chrono::system_clock::from_time_t(std::mktime(&tm));
+
+      new_entry.meta.mtime = ceph::real_clock::from_time_t(std::chrono::system_clock::to_time_t(tp));
       new_entry.meta.accounted_size = obj->size;
-      
+
       results.objs.push_back(new_entry);
 
     }
