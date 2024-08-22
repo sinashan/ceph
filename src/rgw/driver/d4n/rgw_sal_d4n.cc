@@ -195,29 +195,19 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
     for (const auto& obj : dir_objs) {
       rgw_bucket_dir_entry new_entry;
       new_entry.key.name = obj->objName;
-      
       new_entry.exists = true;
 
       std::tm tm = {};
-      std::istringstream ss(obj->creationTime);
-      ss >> std::get_time(&tm, "%Y-%m-%d %H:%M");
+      std::istringstream ss(time_str);
+      ss >> std::get_time(&tm, format.c_str());
       if (ss.fail()) {
-          // Handle error
-          throw std::runtime_error("Failed to parse time");
+          throw std::runtime_error("Failed to parse time string");
       }
+      std::time_t time_t = std::mktime(&tm);
+      auto mtime = std::chrono::system_clock::from_time_t(time_t);
 
-      // Convert std::tm to time_t
-      tm.tm_isdst = -1; // Not set by get_time; tells mktime to determine if DST is in effect
-      time_t time = std::mktime(&tm);
-      if (time == -1) {
-          // Handle error
-          throw std::runtime_error("Failed to convert time");
-      }
-
-      // Convert time_t to std::chrono::system_clock::time_point
-      auto tp = std::chrono::system_clock::from_time_t(time);
-
-      new_entry.meta.mtime = ceph::real_clock::from_time_t(std::chrono::system_clock::to_time_t(tp));
+      // Set other necessary fields for new_entry
+      new_entry.meta.mtime = ceph::real_clock::from_time_t(std::chrono::system_clock::to_time_t(mtime));
       new_entry.meta.accounted_size = obj->size;
 
       results.objs.push_back(new_entry);
