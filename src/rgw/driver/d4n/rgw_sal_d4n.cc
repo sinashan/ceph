@@ -199,7 +199,7 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
 
       std::tm tm = {};
       std::istringstream ss(obj->creationTime);
-      ss >> std::get_time(&tm, format.c_str());
+      ss >> std::get_time(&tm, "%Y-%m-%d %H:%M:%S");
       if (ss.fail()) {
           throw std::runtime_error("Failed to parse time string");
       }
