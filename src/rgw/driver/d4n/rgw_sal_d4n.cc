@@ -195,12 +195,12 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
     for (const auto& obj : dir_objs) {
       rgw_bucket_dir_entry new_entry;
       new_entry.key.name = obj->objName;
+      
       new_entry.exists = true;
 
-      // Set other necessary fields for new_entry
-      auto mtime = std::chrono::system_clock::now();
-      new_entry.meta.mtime = ceph::real_clock::from_time_t(std::chrono::system_clock::to_time_t(mtime));
-
+      new_entry.meta.mtime = ceph::real_clock::from_time_t(std::chrono::system_clock::to_time_t(obj->creationTime));
+      new_entry.meta.accounted_size = obj->size;
+      
       results.objs.push_back(new_entry);
 
     }
