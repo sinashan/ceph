@@ -95,7 +95,7 @@ int ObjectDirectory::exist_key(CacheObj* object, optional_yield y)
   return std::get<0>(resp).value();
 }
 
-int ObjectDirectory::bucket_keys(const DoutPrefixProvider* dpp, std::string bucket_name, std::vector <CacheObj*>* objects, optional_yield y) 
+int ObjectDirectory::get_bucket_keys(const DoutPrefixProvider* dpp, std::string bucket_name, std::vector <CacheObj*>* objects, optional_yield y) 
 {
   ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): " << __LINE__ << dendl;
   response< std::vector<std::string> > resp;
