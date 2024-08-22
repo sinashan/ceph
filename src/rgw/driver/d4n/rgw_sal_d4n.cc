@@ -197,9 +197,8 @@ int D4NFilterBucket::list(const DoutPrefixProvider* dpp, ListParams& params, int
       new_entry.key.name = obj->objName;
       new_entry.exists = true;
 
-      time_t timenum = (time_t) strtol((char*) obj->creationTime, NULL, 10); 
 
-      new_entry.meta.mtime = ceph::real_clock::from_time_t(std::chrono::system_clock::to_time_t(timenum));
+      new_entry.meta.mtime = ceph::real_clock::from_time_t(std::chrono::system_clock::to_time_t((time_t) obj->creationTime));
       new_entry.meta.accounted_size = obj->size;
 
       results.objs.push_back(new_entry);
