@@ -108,11 +108,11 @@ int ObjectDirectory::get_bucket_keys(const DoutPrefixProvider* dpp, std::string 
 
     const auto& keys = std::get<0>(resp).value();
     for (const auto& key : keys) {
-      // Count underscores in the key
-      size_t underscore_count = std::count(key.begin(), key.end(), '_');
-      if (underscore_count == 1) {
-        // Extract the bucket name from the key
-        std::string key_bucket_name = key.substr(0, key.find("_"));
+      std::string is_dirty = key.substr(0, key.find("_"));
+      ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): Dirty: " << is_dirty << dendl;
+      if (is_dirty == "D") {
+        std::string key_bucket_name = key.substr(2, key.find("_"));
+        ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): Bucket Name: " << key_bucket_name << dendl;
         if (key_bucket_name == bucket_name) {
           //std::string object_name = key.substr(key.find("_") + 1);
           CacheObj* object = new CacheObj();
@@ -169,7 +169,7 @@ int ObjectDirectory::get_bucket_keys(const DoutPrefixProvider* dpp, std::string 
 
           objects->push_back(object); // Push the key into objects if it matches the bucket_name
         }
-      }
+    }
     }
 
     if ((bool)ec)
