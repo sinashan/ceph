@@ -108,7 +108,7 @@ int ObjectDirectory::get_bucket_keys(const DoutPrefixProvider* dpp, std::string 
 
     const auto& keys = std::get<0>(resp).value();
     for (const auto& key : keys) {
-      std::string is_dirty = key.find("_");
+      std::string is_dirty = key.substr(0, key.find("_"));
       ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): Dirty: " << is_dirty << dendl;
       if (is_dirty == "D") {
         size_t first_underscore = key.find("_");
