@@ -112,7 +112,8 @@ int ObjectDirectory::get_bucket_keys(const DoutPrefixProvider* dpp, std::string 
       ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): Dirty: " << is_dirty << dendl;
       if (is_dirty == "D") {
         size_t first_underscore = key.find("_");
-        std::string key_bucket_name = key.substr(2, key.find("_") + first_underscore);
+        size_t second_underscore = key.find("_", first_underscore + 1);
+        std::string key_bucket_name = key.substr(first_underscore + 1, second_underscore - first_underscore - 1);
         ldpp_dout(dpp, 20) << "SINA: " << __func__ << "(): Bucket Name: " << key_bucket_name << dendl;
         if (key_bucket_name == bucket_name) {
           //std::string object_name = key.substr(key.find("_") + 1);
