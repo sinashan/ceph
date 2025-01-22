@@ -83,6 +83,7 @@ class ObjectDirectory: public Directory {
     */
 
     int exist_key(CacheObj* object, optional_yield y);
+    int get_bucket_keys(const DoutPrefixProvider* dpp, std::string bucket_name, std::vector <CacheObj*>* objects, optional_yield y);
     //void shutdown();
     int set(CacheObj* object, optional_yield y);
     int get(CacheObj* object, optional_yield y);
